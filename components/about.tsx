@@ -140,8 +140,8 @@ export function About() {
           <Row
             label="GitHub"
             value={
-              <ExternalLink href="https://github.com/lilith/interleaved">
-                lilith/interleaved
+              <ExternalLink href="https://github.com/imazen/interleaved">
+                imazen/interleaved
               </ExternalLink>
             }
           />

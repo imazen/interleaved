@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 
-const REPO = "lilith/interleaved";
+const REPO = "imazen/interleaved";
 const PACKAGE_JSON_URL =
-  "https://raw.githubusercontent.com/lilith/interleaved/main/package.json";
+  "https://raw.githubusercontent.com/imazen/interleaved/main/package.json";
 
 export async function GET() {
   try {

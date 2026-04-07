@@ -32,7 +32,7 @@ Human edits content on their phone. Claude revises templates and styling. Both w
 ### Quick Start
 
 ```bash
-git clone https://github.com/lilith/interleaved.git
+git clone https://github.com/imazen/interleaved.git
 cd interleaved
 npm install
 ```
