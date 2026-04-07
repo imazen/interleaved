@@ -46,7 +46,7 @@ const assertRepoInInstallation = async (
       installationRepo.name?.toLowerCase() === repo.toLowerCase()
     )
   );
-  if (!isInstalledForRepo) throw new Error(`"${owner}/${repo}" is not part of your Pages CMS installation.`);
+  if (!isInstalledForRepo) throw new Error(`"${owner}/${repo}" is not part of your Interleaved installation.`);
 
   return {
     repoAccess,
@@ -175,7 +175,7 @@ const handleAddCollaborator = async (prevState: any, formData: FormData) => {
         );
         await sendEmail({
           to: email,
-          subject: `Join "${owner}/${repo}" on Pages CMS`,
+          subject: `Join "${owner}/${repo}" on Interleaved`,
           html,
         });
       } catch (error: any) {
@@ -282,7 +282,7 @@ const handleResendCollaboratorInvite = async (collaboratorId: number, owner: str
 
     await sendEmail({
       to: collaborator.email,
-      subject: `Join "${owner}/${repo}" on Pages CMS`,
+      subject: `Join "${owner}/${repo}" on Interleaved`,
       html,
     });
 

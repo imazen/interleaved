@@ -54,7 +54,7 @@ export const InviteEmailTemplate = ({
                 src={`${baseUrl}/images/email-logo.png`}
                 width="42"
                 height="42"
-                alt="Pages CMS"
+                alt="Interleaved"
                 className="my-0 mx-auto"
               />
             </Section>
@@ -62,7 +62,7 @@ export const InviteEmailTemplate = ({
               className="text-[24px] font-semibold p-0 my-[30px] mx-0 text-center tracking-tight"
               style={{ color: emailTheme.foreground }}
             >
-              Join &quot;{repoName}&quot; on Pages CMS
+              Join &quot;{repoName}&quot; on Interleaved
             </Heading>
             <Text
               className="text-[16px] leading-[24px]"

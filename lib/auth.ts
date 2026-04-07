@@ -94,7 +94,7 @@ export const auth = betterAuth({
 
         await sendEmail({
           to: email,
-          subject: "Sign in link for Pages CMS",
+          subject: "Sign in link for Interleaved",
           html,
         });
       },

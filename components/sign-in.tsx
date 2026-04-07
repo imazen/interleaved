@@ -103,7 +103,7 @@ export function SignIn() {
     <div className="min-h-screen p-4 md:p-6 flex justify-center items-center">
       <div className="sm:max-w-[340px] w-full space-y-6">
         <h1 className="text-lg font-medium tracking-tight text-center">
-          Sign in to Pages CMS
+          Sign in to Interleaved
         </h1>
         <Button
           type="button"
@@ -156,24 +156,15 @@ export function SignIn() {
             )}
           </Button>
         </form>
-        <p className="text-sm text-muted-foreground">
-          By clicking continue, you agree to our{" "}
+        <p className="text-sm text-muted-foreground text-center">
+          Fork of{" "}
           <a
             className="underline hover:decoration-muted-foreground/50"
-            href="https://pagescms.org/terms"
+            href="https://github.com/pagescms/pagescms"
             target="_blank"
           >
-            Terms of Service
-          </a>{" "}
-          and{" "}
-          <a
-            className="underline hover:decoration-muted-foreground/50"
-            href="https://pagescms.org/privacy"
-            target="_blank"
-          >
-            Privacy Policy
+            Pages CMS
           </a>
-          .
         </p>
       </div>
     </div>

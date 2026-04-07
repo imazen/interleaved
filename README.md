@@ -1,127 +1,91 @@
-# Pages CMS
+# Interleaved
 
-[Pages CMS](https://pagescms.org) is an open source CMS for GitHub repositories. It is especially well suited for static sites and content-driven apps built with tools like Jekyll, Hugo, Next.js, Astro, VuePress, and similar stacks.
+A Claude-native CMS for static sites. Fork of [Pages CMS](https://github.com/pagescms/pagescms).
 
-You can use the hosted version directly at [app.pagescms.org](https://app.pagescms.org), or run your own local development copy from this repository.
+Human edits content on their phone. Claude revises templates and styling. Both work on the same git repo, interleaved.
 
-[![Screenshot of the Pages CMS editor](https://pagescms.org/media/screenshot.png)](https://demo.pagescms.org)
+## What's Different from Pages CMS
 
-*[Watch the demo ▶](https://demo.pagescms.org)*
+- **Schema inference** — drop markdown files in a folder, start editing. No `.pages.yml` required (still supported as opt-in override)
+- **External media storage** — user uploads go to R2/S3/local with [RIAPI/Imageflow](https://github.com/imazen/imageflow) query-string transforms. Theme assets stay in git
+- **Mobile-first UI** — fixed bottom toolbar (avoids OS selection bubble), card-based content list, camera-to-upload pipeline
+- **Claude Code friendly** — all content is plain markdown + YAML frontmatter. Zero proprietary formats. MCP server for media library access
+- **First-class source editing** — CodeMirror is a peer of the rich text editor, not hidden behind a toggle
 
-## Documentation
+## What's the Same
 
-Full documentation lives at [pagescms.org/docs](https://pagescms.org/docs).
+- GitHub App model for repo access
+- PostgreSQL + Drizzle ORM (deploy on Railway, etc.)
+- Next.js + React + shadcn/ui + TipTap + CodeMirror
+- MIT license
 
-Useful starting points:
+## Local Development
 
-- [Install locally](https://pagescms.org/docs/guides/installing/)
-- [Create the GitHub App](https://pagescms.org/docs/guides/installing/github-app/)
-- [Environment variables](https://pagescms.org/docs/development/environment-variables/)
-- [Upgrading to 2.x](https://pagescms.org/docs/guides/upgrading-to-2/)
+### Prerequisites
 
-## Use online
-
-The easiest way to get started is the hosted version at [app.pagescms.org](https://app.pagescms.org).
-
-Use that if you want to:
-
-- try Pages CMS immediately,
-- edit content without running anything locally,
-- stay on the latest hosted version.
-
-## Local development
-
-### What you need
-
+- Node.js 20+
 - PostgreSQL
-- a GitHub App
-- a local `.env.local`
-- the Pages CMS repo checked out locally
+- A GitHub App
 
-### Quick start
-
-1. Clone the repository:
+### Quick Start
 
 ```bash
-git clone https://github.com/pagescms/pagescms.git
-cd pagescms
-```
-
-2. Start PostgreSQL locally:
-
-```bash
-docker run --name pagescms-db -e POSTGRES_USER=pagescms -e POSTGRES_PASSWORD=pagescms -e POSTGRES_DB=pagescms -p 5432:5432 -d postgres:16
-```
-
-3. Install dependencies:
-
-```bash
+git clone https://github.com/lilith/interleaved.git
+cd interleaved
 npm install
 ```
 
-4. Create `.env.local` with at least:
+Start PostgreSQL:
 
 ```bash
-DATABASE_URL=postgresql://pagescms:pagescms@localhost:5432/pagescms
-BETTER_AUTH_SECRET=your-random-secret
-CRYPTO_KEY=your-random-secret
+docker run --name interleaved-db -e POSTGRES_USER=interleaved -e POSTGRES_PASSWORD=interleaved -e POSTGRES_DB=interleaved -p 5432:5432 -d postgres:16
 ```
 
-Generate secrets with:
+Create `.env.local`:
 
 ```bash
-openssl rand -base64 32
+DATABASE_URL=postgresql://interleaved:interleaved@localhost:5432/interleaved
+BETTER_AUTH_SECRET=$(openssl rand -base64 32)
+CRYPTO_KEY=$(openssl rand -base64 32)
 ```
 
-5. Create your GitHub App with the helper:
+Create GitHub App:
 
 ```bash
 npm run setup:github-app -- --base-url http://localhost:3000
 ```
 
-Useful options:
-
-- `--owner-type personal|org`
-- `--org <slug>`
-- `--app-name "Pages CMS (local)"`
-- `--env .env.local`
-- `--no-open`
-
-6. Run database migrations:
+Run migrations and start:
 
 ```bash
 npm run db:migrate
-```
-
-If cache state is known stale or corrupted, clear it with:
-
-```bash
-npm run db:clear-cache
-```
-
-7. Start the app:
-
-```bash
 npm run dev
 ```
 
-If you need GitHub webhooks to reach your local app, use a public tunnel URL as the helper `--base-url`.
+## Architecture
 
-For more detail, see:
+```
+Interleaved Admin (this app)     Static Site (any host)
+        │                               │
+        │ GitHub API                     │ git clone + build
+        ▼                               ▼
+   ┌──────────────────────────────────────┐
+   │           Git Repo                    │
+   │  content/*.md  templates/  styles/    │
+   └──────────────────────────────────────┘
+        │                               │
+        │ RIAPI URLs                    │ RIAPI URLs
+        ▼                               ▼
+   ┌──────────────────────────────────────┐
+   │  Media Storage (R2/S3/local)          │
+   │  + Imageflow Server (transforms)      │
+   └──────────────────────────────────────┘
+```
 
-- [Install locally](https://pagescms.org/docs/guides/installing/)
-- [Create the GitHub App](https://pagescms.org/docs/guides/installing/github-app/)
-- [Environment variables](https://pagescms.org/docs/development/environment-variables/)
-- [Caching](https://pagescms.org/docs/development/caching/)
-
-## Support the project
-
-- [Contribute code](https://github.com/pagescms/pagescms/pulls)
-- [Report issues](https://github.com/pagescms/pagescms/issues)
-- [Sponsor me](https://github.com/sponsors/hunvreus)
-- [Star the project on GitHub](https://github.com/pagescms/pagescms)
-- [Join the Discord chat](https://pagescms.org/chat)
+The admin app and the static site are separate deployments sharing a git repo and media store.
 
 ## License
 
-Everything in this repo is released under the [MIT License](LICENSE).
+MIT. See [LICENSE](LICENSE) for details.
+
+Based on [Pages CMS](https://github.com/pagescms/pagescms) by Ronan Berder.

@@ -1,6 +1,6 @@
 {
-  "name": "pagescms",
-  "description": "A user-friendly CMS for Next.js, Astro, Hugo, Nuxt, Jekyll or any other static site generator.",
+  "name": "interleaved",
+  "description": "A Claude-native CMS for static sites. Mobile-first editing, external media with RIAPI, schema inference from frontmatter.",
   "license": "MIT",
   "author": {
     "name": "Ronan Berder"

@@ -31,7 +31,7 @@ export const LoginEmailTemplate = ({
   return (
     <Html>
       <Head />
-      <Preview>Sign in to Pages CMS</Preview>
+      <Preview>Sign in to Interleaved</Preview>
       <Tailwind>
         <Body
           className="my-auto mx-auto font-sans px-2 antialiased"
@@ -46,7 +46,7 @@ export const LoginEmailTemplate = ({
                 src={`${baseUrl}/images/email-logo.png`}
                 width="42"
                 height="42"
-                alt="Pages CMS"
+                alt="Interleaved"
                 className="my-0 mx-auto"
               />
             </Section>
@@ -54,13 +54,13 @@ export const LoginEmailTemplate = ({
               className="text-[24px] font-semibold p-0 my-[30px] mx-0 text-center tracking-tight"
               style={{ color: emailTheme.foreground }}
             >
-              Sign in to Pages CMS
+              Sign in to Interleaved
             </Heading>
             <Text
               className="text-[16px] leading-[24px]"
               style={{ color: emailTheme.foreground }}
             >
-              Click the button below to sign in to Pages CMS:
+              Click the button below to sign in to Interleaved:
             </Text>
             <Section className="text-center mt-[24px] mb-[24px]">
               <Button

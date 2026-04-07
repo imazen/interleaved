@@ -17,13 +17,13 @@ const jetbrainsMono = JetBrains_Mono({
 });
 const appUrl = getBaseUrl();
 const socialImage = "/images/social-card.png";
-const description = "The No-Hassle CMS for GitHub";
+const description = "Claude-native CMS for static sites";
 
 export const metadata: Metadata = {
   metadataBase: new URL(appUrl),
   title: {
-    template: "%s | Pages CMS",
-    default: "Pages CMS",
+    template: "%s | Interleaved",
+    default: "Interleaved",
   },
   description,
   alternates: {
@@ -32,21 +32,21 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     url: appUrl,
-    siteName: "Pages CMS",
-    title: "Pages CMS",
+    siteName: "Interleaved",
+    title: "Interleaved",
     description,
     images: [
       {
         url: socialImage,
         width: 1200,
         height: 630,
-        alt: "Pages CMS social card",
+        alt: "Interleaved social card",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Pages CMS",
+    title: "Interleaved",
     description,
     images: [socialImage],
   },
