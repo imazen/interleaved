@@ -8,6 +8,7 @@ import { configTable } from "@/db/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { createOctokitInstance } from "@/lib/utils/octokit";
 import { configVersion, normalizeConfig, parseConfig } from "@/lib/config";
+import { inferConfigFromRepo } from "@/lib/infer-config";
 
 const getConfigFromDb = async (
   owner: string,
@@ -156,6 +157,18 @@ const fetchConfigFromGithub = async (
     };
   } catch (error: any) {
     if (error?.status === 404 && error?.response?.data?.message === "Not Found") {
+      // No .pages.yml — try to infer config from repo structure
+      try {
+        const inferred = await inferConfigFromRepo(owner, repo, branch, token);
+        if (inferred) {
+          return {
+            sha: "inferred",
+            object: inferred,
+          };
+        }
+      } catch (inferError) {
+        console.error("Config inference failed, returning null:", inferError);
+      }
       return null;
     }
     throw error;

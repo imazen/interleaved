@@ -27,28 +27,28 @@ export default function Page() {
       setError(true);
     }
   }, [config, router, user]);
-  
+
   return error
     ? (
       hasGithubIdentity(user)
         ? <Empty className="absolute inset-0 border-0 rounded-none">
             <EmptyHeader>
-              <EmptyTitle>Configuration unavailable</EmptyTitle>
-              <EmptyDescription>This repository is not configured, and configuration access is disabled here. Edit &quot;.pages.yml&quot; on GitHub if you think this is a mistake.</EmptyDescription>
+              <EmptyTitle>No content found</EmptyTitle>
+              <EmptyDescription>No markdown files or content collections were detected in this repository. Add markdown files or create a .pages.yml configuration file.</EmptyDescription>
             </EmptyHeader>
             <EmptyContent>
               <Link
                 className={buttonVariants({ variant: "default" })}
                 href={`https://github.com/${config?.owner}/${config?.repo}/edit/${encodeURIComponent(config!.branch)}/.pages.yml`}
               >
-                Edit configuration on GitHub
+                Add configuration
               </Link>
             </EmptyContent>
           </Empty>
         : <Empty className="absolute inset-0 border-0 rounded-none">
             <EmptyHeader>
-              <EmptyTitle>Repository not configured</EmptyTitle>
-              <EmptyDescription>This repository does not have a &quot;.pages.yml&quot; file yet. Ask a GitHub admin to initialize the configuration first.</EmptyDescription>
+              <EmptyTitle>No content found</EmptyTitle>
+              <EmptyDescription>No markdown files were detected in this repository. Ask a repository admin to add content or configure the repository.</EmptyDescription>
             </EmptyHeader>
           </Empty>
     )
