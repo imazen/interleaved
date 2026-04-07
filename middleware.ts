@@ -1,14 +1,27 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 /**
- * Rate limiter for API routes.
+ * Middleware: canonical domain redirect + API rate limiting.
  *
- * Simple sliding window per IP. Limits to RATE_LIMIT_MAX requests per
- * RATE_LIMIT_WINDOW_MS window (defaults: 120 requests per 60 seconds).
+ * 1. Redirects non-canonical admin domains to ADMIN_CANONICAL_HOST
+ *    (e.g., interleaved.app → admin.interleaved.app).
+ *    Both domains work for access, but one is canonical.
+ *    Set ADMIN_CANONICAL_HOST to enable. Unset = no redirect.
+ *    ADMIN_ALLOWED_HOSTS is a comma-separated list of hosts that
+ *    should serve the app (not redirect). All others 404.
  *
- * Only applies to /api/ routes. Non-API routes pass through.
- * In-memory — resets on deploy. Fine for single-instance Railway.
+ * 2. Rate limits API routes — sliding window per IP.
  */
+
+const CANONICAL_HOST = process.env.ADMIN_CANONICAL_HOST?.trim() || "";
+const ALLOWED_HOSTS = new Set(
+  (process.env.ADMIN_ALLOWED_HOSTS || "")
+    .split(",")
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean),
+);
+// Always allow the canonical host
+if (CANONICAL_HOST) ALLOWED_HOSTS.add(CANONICAL_HOST.toLowerCase());
 
 const WINDOW_MS = parseInt(process.env.RATE_LIMIT_WINDOW_MS || "60000", 10);
 const MAX_REQUESTS = parseInt(process.env.RATE_LIMIT_MAX || "120", 10);
@@ -38,7 +51,28 @@ function getClientIp(request: NextRequest): string {
 }
 
 export function middleware(request: NextRequest) {
-  // Only rate-limit API routes
+  // --- Canonical domain redirect ---
+  if (CANONICAL_HOST && ALLOWED_HOSTS.size > 0) {
+    const host = request.headers.get("host")?.split(":")[0]?.toLowerCase() || "";
+    if (host && !ALLOWED_HOSTS.has(host) && host !== "localhost") {
+      // Unknown host — redirect to canonical
+      const url = request.nextUrl.clone();
+      url.host = CANONICAL_HOST;
+      url.port = "";
+      url.protocol = "https:";
+      return NextResponse.redirect(url, 301);
+    }
+    if (host && host !== CANONICAL_HOST.toLowerCase() && host !== "localhost") {
+      // Allowed but non-canonical — redirect to canonical
+      const url = request.nextUrl.clone();
+      url.host = CANONICAL_HOST;
+      url.port = "";
+      url.protocol = "https:";
+      return NextResponse.redirect(url, 301);
+    }
+  }
+
+  // --- Rate limiting (API routes only) ---
   if (!request.nextUrl.pathname.startsWith("/api/")) {
     return NextResponse.next();
   }
@@ -86,5 +120,8 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: "/api/:path*",
+  matcher: [
+    // Run on all routes for domain redirect, but skip static assets
+    "/((?!_next/static|_next/image|favicon.ico|icon.svg|images/).*)",
+  ],
 };
