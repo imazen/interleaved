@@ -169,22 +169,43 @@ export function inferFieldsFromSamples(samples: Record<string, unknown>[]): Fiel
 }
 
 /**
- * Build a complete content schema entry for a directory of markdown files.
+ * Build a content schema entry for a directory of markdown files.
  * This is the shape expected by normalizeConfig's content array.
  */
 export function buildInferredCollectionEntry(
   name: string,
   dirPath: string,
   fields: Field[],
+  format: "yaml-frontmatter" | "json" = "yaml-frontmatter",
 ): Record<string, unknown> {
   return {
     name,
     label: labelFromName(name),
     type: "collection",
     path: dirPath,
-    format: "yaml-frontmatter",
+    format,
     fields,
-    // Mark as auto-inferred so the UI can show a hint
+    _inferred: true,
+  };
+}
+
+/**
+ * Build a content schema entry for a single data file (JSON, YAML, TOML).
+ * Used for files like _data/site.json, config.json, navigation.json.
+ */
+export function buildInferredFileEntry(
+  name: string,
+  filePath: string,
+  fields: Field[],
+  format: "json" | "yaml" | "toml" = "json",
+): Record<string, unknown> {
+  return {
+    name,
+    label: labelFromName(name.replace(/\.(json|ya?ml|toml)$/i, "")),
+    type: "file",
+    path: filePath,
+    format,
+    fields,
     _inferred: true,
   };
 }
