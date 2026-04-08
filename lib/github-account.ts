@@ -4,15 +4,25 @@ import { db } from "@/db";
 import { accountTable, userTable } from "@/db/schema";
 import { createOctokitInstance } from "@/lib/utils/octokit";
 import { refreshGithubToken } from "@/lib/github-token-refresh";
+import { decryptOAuthToken } from "@/lib/decrypt-oauth-token";
 
-// Read the linked GitHub OAuth account for a user.
+// Read the linked GitHub OAuth account for a user (decrypts token).
 const getGithubAccount = cache(async (userId: string) => {
-  return db.query.accountTable.findFirst({
+  const account = await db.query.accountTable.findFirst({
     where: and(
       eq(accountTable.userId, userId),
       eq(accountTable.providerId, "github")
     )
   });
+  if (!account) return null;
+
+  // Decrypt access token — better-auth encrypts it with encryptOAuthTokens
+  const decryptedToken = await decryptOAuthToken(account.accessToken);
+
+  return {
+    ...account,
+    accessToken: decryptedToken,
+  };
 });
 
 const getGithubId = cache(async (userId: string): Promise<number | null> => {

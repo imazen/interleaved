@@ -10,6 +10,7 @@
 import { db } from "@/db";
 import { accountTable } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
+import { decryptOAuthToken, encryptOAuthToken } from "@/lib/decrypt-oauth-token";
 
 const refreshInFlight = new Map<string, Promise<string | null>>();
 
@@ -39,6 +40,16 @@ async function doRefresh(userId: string): Promise<string | null> {
     return null;
   }
 
+  // Decrypt the stored refresh token (better-auth encrypts with encryptOAuthTokens)
+  const refreshToken = await decryptOAuthToken(account.refreshToken);
+  if (!refreshToken) return null;
+
+  // Check if refresh token is expired
+  if (account.refreshTokenExpiresAt && account.refreshTokenExpiresAt.getTime() < Date.now()) {
+    console.log("[auth] refresh token expired, cannot refresh silently");
+    return null;
+  }
+
   const clientId = process.env.GITHUB_APP_CLIENT_ID;
   const clientSecret = process.env.GITHUB_APP_CLIENT_SECRET;
   if (!clientId || !clientSecret) return null;
@@ -54,7 +65,7 @@ async function doRefresh(userId: string): Promise<string | null> {
         client_id: clientId,
         client_secret: clientSecret,
         grant_type: "refresh_token",
-        refresh_token: account.refreshToken,
+        refresh_token: refreshToken,
       }),
     });
 
@@ -66,14 +77,14 @@ async function doRefresh(userId: string): Promise<string | null> {
       return null;
     }
 
-    // Update the stored tokens
+    // Encrypt the new tokens before storing (matching better-auth's scheme)
     const updates: Record<string, any> = {
-      accessToken: data.access_token,
+      accessToken: await encryptOAuthToken(data.access_token as string),
       updatedAt: new Date(),
     };
 
     if (data.refresh_token) {
-      updates.refreshToken = data.refresh_token;
+      updates.refreshToken = await encryptOAuthToken(data.refresh_token as string);
     }
 
     if (data.expires_in) {
