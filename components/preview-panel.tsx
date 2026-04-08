@@ -3,14 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useConfig } from "@/contexts/config-context";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Monitor, Smartphone, Tablet, RefreshCw } from "lucide-react";
+import { Monitor, Smartphone, Tablet, RefreshCw, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -22,19 +15,30 @@ const DEVICE_WIDTHS: Record<PreviewDevice, string> = {
   desktop: "100%",
 };
 
+type PreviewMode = "builtin" | "deploy" | "url";
+
 /**
  * Preview panel for the entry editor.
- * Renders content through the site's Handlebars templates in an iframe.
- * Mobile-native: defaults to phone viewport, device switcher for larger screens.
+ *
+ * Supports three modes:
+ * - builtin: renders through our Handlebars API (instant)
+ * - deploy: shows a deploy preview URL from Netlify/Vercel/CF Pages
+ * - url: shows a static URL template
+ *
+ * Mobile-native: defaults to full width, device switcher on larger screens.
  */
 export function PreviewPanel({
   content,
   filePath,
   format,
+  previewMode = "builtin",
+  previewUrl,
 }: {
   content: string;
   filePath?: string;
   format?: "markdown" | "json";
+  previewMode?: PreviewMode;
+  previewUrl?: string;
 }) {
   const { config } = useConfig();
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -44,7 +48,8 @@ export function PreviewPanel({
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const renderPreview = useCallback(async () => {
+  // --- Built-in preview (Handlebars renderer) ---
+  const renderBuiltinPreview = useCallback(async () => {
     if (!config || !content) return;
 
     setLoading(true);
@@ -65,7 +70,6 @@ export function PreviewPanel({
       );
 
       if (!response.ok) {
-        const text = await response.text();
         setError(`Preview failed: ${response.status}`);
         return;
       }
@@ -79,25 +83,42 @@ export function PreviewPanel({
     }
   }, [config, content, filePath, format]);
 
-  // Debounced preview — re-render 800ms after content stops changing
+  // Debounced builtin preview
   useEffect(() => {
+    if (previewMode !== "builtin") return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(renderPreview, 800);
+    debounceRef.current = setTimeout(renderBuiltinPreview, 800);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [renderPreview]);
+  }, [renderBuiltinPreview, previewMode]);
 
-  // Write HTML to iframe via srcdoc
+  // Write HTML to iframe (builtin mode)
   useEffect(() => {
-    if (iframeRef.current && previewHtml !== null) {
+    if (iframeRef.current && previewHtml !== null && previewMode === "builtin") {
       iframeRef.current.srcdoc = previewHtml;
     }
-  }, [previewHtml]);
+  }, [previewHtml, previewMode]);
+
+  const handleRefresh = () => {
+    if (previewMode === "builtin") {
+      renderBuiltinPreview();
+    } else if (iframeRef.current) {
+      // Reload external URL
+      const src = iframeRef.current.src;
+      iframeRef.current.src = "";
+      requestAnimationFrame(() => {
+        if (iframeRef.current) iframeRef.current.src = src;
+      });
+    }
+  };
+
+  // Determine iframe src for external modes
+  const externalSrc = previewMode !== "builtin" ? previewUrl : undefined;
 
   return (
     <div className="flex flex-col h-full min-h-[300px]">
-      {/* Toolbar — compact on mobile */}
+      {/* Toolbar */}
       <div className="flex items-center justify-between gap-2 p-2 border-b bg-muted/30">
         <div className="hidden md:flex items-center gap-1">
           <Button
@@ -125,15 +146,29 @@ export function PreviewPanel({
             <Monitor className="size-4" />
           </Button>
         </div>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={renderPreview}
-          disabled={loading}
-          title="Refresh preview"
-        >
-          <RefreshCw className={cn("size-4", loading && "animate-spin")} />
-        </Button>
+        <div className="flex items-center gap-1">
+          {externalSrc && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              asChild
+              title="Open in new tab"
+            >
+              <a href={externalSrc} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="size-4" />
+              </a>
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={handleRefresh}
+            disabled={loading}
+            title="Refresh preview"
+          >
+            <RefreshCw className={cn("size-4", loading && "animate-spin")} />
+          </Button>
+        </div>
       </div>
 
       {/* Preview iframe */}
@@ -142,13 +177,14 @@ export function PreviewPanel({
           <div className="flex items-center justify-center p-8 text-sm text-muted-foreground">
             {error}
           </div>
-        ) : previewHtml === null ? (
+        ) : previewMode === "builtin" && previewHtml === null ? (
           <Skeleton className="w-full h-full" />
         ) : (
           <iframe
             ref={iframeRef}
             title="Preview"
-            sandbox="allow-same-origin"
+            sandbox={previewMode === "builtin" ? "allow-same-origin" : "allow-same-origin allow-scripts"}
+            src={externalSrc}
             className={cn(
               "bg-white border-0 h-full transition-all",
               device === "desktop" ? "w-full" : "shadow-lg rounded-lg my-4",
