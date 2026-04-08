@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useConfig } from "@/contexts/config-context";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Monitor, Smartphone, Tablet, RefreshCw, ExternalLink } from "lucide-react";
@@ -17,110 +17,75 @@ const DEVICE_WIDTHS: Record<PreviewDevice, string> = {
 
 type PreviewMode = "builtin" | "deploy" | "url";
 
+// Worker URL. Override via NEXT_PUBLIC_PREVIEW_WORKER_URL for staging/dev.
+const DEFAULT_WORKER =
+  (typeof process !== "undefined" && process.env.NEXT_PUBLIC_PREVIEW_WORKER_URL) ||
+  "https://preview.interleaved.app";
+
 /**
  * Preview panel for the entry editor.
  *
- * Supports three modes:
- * - builtin: renders through our Handlebars API (instant)
- * - deploy: shows a deploy preview URL from Netlify/Vercel/CF Pages
- * - url: shows a static URL template
+ * Three modes:
+ * - builtin: iframes the preview worker at preview.interleaved.app
+ * - deploy: iframes a deploy preview URL from Netlify/Vercel/CF Pages
+ * - url: iframes a static URL template
  *
- * Mobile-native: defaults to full width, device switcher on larger screens.
+ * The worker renders from the latest committed state in git — preview
+ * reflects what would be deployed after save. `renderVersion` props can
+ * be bumped externally to force a reload after a save.
  */
 export function PreviewPanel({
-  content,
   filePath,
-  format,
   previewMode = "builtin",
   previewUrl,
+  renderVersion = 0,
 }: {
-  content: string;
+  /** Unused now but kept for API compat */
+  content?: string;
   filePath?: string;
   format?: "markdown" | "json";
   previewMode?: PreviewMode;
   previewUrl?: string;
+  /** Bump this to force a reload (e.g., after save) */
+  renderVersion?: number;
 }) {
   const { config } = useConfig();
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [device, setDevice] = useState<PreviewDevice>("desktop");
-  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [iframeLoaded, setIframeLoaded] = useState(false);
 
-  // --- Built-in preview (Handlebars renderer) ---
-  const renderBuiltinPreview = useCallback(async () => {
-    if (!config || !content) return;
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      // Detect data files (e.g., _data/site.json) — these affect the whole
-      // site, so we render the index page with the proposed data
-      const isDataFile = !!filePath?.match(/^_?data\//);
-      const previewMode = isDataFile ? "data" : "entry";
-
-      const response = await fetch(
-        `/api/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/preview`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            path: filePath,
-            content,
-            format: format || (filePath?.endsWith(".json") ? "json" : "markdown"),
-            mode: previewMode,
-          }),
-        },
-      );
-
-      if (!response.ok) {
-        setError(`Preview failed: ${response.status}`);
-        return;
-      }
-
-      const html = await response.text();
-      setPreviewHtml(html);
-    } catch (e: any) {
-      setError(e.message || "Preview failed");
-    } finally {
-      setLoading(false);
+  // Build the iframe URL
+  const iframeSrc = useMemo(() => {
+    if (previewMode !== "builtin") {
+      return previewUrl || "";
     }
-  }, [config, content, filePath, format]);
+    if (!config) return "";
+    const params = new URLSearchParams({
+      owner: config.owner,
+      repo: config.repo,
+      branch: config.branch,
+    });
+    if (filePath) params.set("entry", filePath);
+    // cachebust on save version
+    if (renderVersion > 0) params.set("v", String(renderVersion));
+    return `${DEFAULT_WORKER}/?${params.toString()}`;
+  }, [previewMode, previewUrl, config, filePath, renderVersion]);
 
-  // Debounced builtin preview
+  // Reload on src change
   useEffect(() => {
-    if (previewMode !== "builtin") return;
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(renderBuiltinPreview, 800);
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [renderBuiltinPreview, previewMode]);
+    setIframeLoaded(false);
+  }, [iframeSrc]);
 
-  // Write HTML to iframe (builtin mode)
-  useEffect(() => {
-    if (iframeRef.current && previewHtml !== null && previewMode === "builtin") {
-      iframeRef.current.srcdoc = previewHtml;
-    }
-  }, [previewHtml, previewMode]);
-
-  const handleRefresh = () => {
-    if (previewMode === "builtin") {
-      renderBuiltinPreview();
-    } else if (iframeRef.current) {
-      // Reload external URL
-      const src = iframeRef.current.src;
-      iframeRef.current.src = "";
-      requestAnimationFrame(() => {
-        if (iframeRef.current) iframeRef.current.src = src;
-      });
-    }
-  };
-
-  // Determine iframe src for external modes
-  const externalSrc = previewMode !== "builtin" ? previewUrl : undefined;
+  const handleRefresh = useCallback(() => {
+    if (!iframeRef.current) return;
+    setIframeLoaded(false);
+    // Force reload by nulling src then restoring
+    const src = iframeRef.current.src;
+    iframeRef.current.src = "about:blank";
+    requestAnimationFrame(() => {
+      if (iframeRef.current) iframeRef.current.src = src;
+    });
+  }, []);
 
   return (
     <div className="flex flex-col h-full min-h-[300px]">
@@ -153,14 +118,14 @@ export function PreviewPanel({
           </Button>
         </div>
         <div className="flex items-center gap-1">
-          {externalSrc && (
+          {iframeSrc && (
             <Button
               variant="ghost"
               size="icon-sm"
               asChild
               title="Open in new tab"
             >
-              <a href={externalSrc} target="_blank" rel="noopener noreferrer">
+              <a href={iframeSrc} target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="size-4" />
               </a>
             </Button>
@@ -169,28 +134,27 @@ export function PreviewPanel({
             variant="ghost"
             size="icon-sm"
             onClick={handleRefresh}
-            disabled={loading}
+            disabled={!iframeLoaded}
             title="Refresh preview"
           >
-            <RefreshCw className={cn("size-4", loading && "animate-spin")} />
+            <RefreshCw className={cn("size-4", !iframeLoaded && "animate-spin")} />
           </Button>
         </div>
       </div>
 
       {/* Preview iframe */}
-      <div className="flex-1 overflow-auto bg-gray-50 flex justify-center">
-        {error ? (
-          <div className="flex items-center justify-center p-8 text-sm text-muted-foreground">
-            {error}
-          </div>
-        ) : previewMode === "builtin" && previewHtml === null ? (
-          <Skeleton className="w-full h-full" />
-        ) : (
+      <div className="flex-1 overflow-auto bg-gray-50 dark:bg-gray-900 flex justify-center relative">
+        {!iframeLoaded && iframeSrc && (
+          <Skeleton className="absolute inset-0 w-full h-full" />
+        )}
+        {iframeSrc ? (
           <iframe
             ref={iframeRef}
             title="Preview"
-            sandbox={previewMode === "builtin" ? "allow-same-origin" : "allow-same-origin allow-scripts"}
-            src={externalSrc}
+            src={iframeSrc}
+            sandbox="allow-same-origin"
+            referrerPolicy="no-referrer"
+            onLoad={() => setIframeLoaded(true)}
             className={cn(
               "bg-white border-0 h-full transition-all",
               device === "desktop" ? "w-full" : "shadow-lg rounded-lg my-4",
@@ -200,6 +164,10 @@ export function PreviewPanel({
               maxWidth: "100%",
             }}
           />
+        ) : (
+          <div className="flex items-center justify-center p-8 text-sm text-muted-foreground">
+            No preview URL configured
+          </div>
         )}
       </div>
     </div>

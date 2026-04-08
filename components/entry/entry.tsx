@@ -27,7 +27,6 @@ import type { ApiSuccess, EntryData, EntryHistoryItem } from "@/types/api";
 import { EntryForm } from "./entry-form";
 import { EntryHistoryDropdown } from "./entry-history";
 import { PreviewPanel } from "@/components/preview-panel";
-import { stringify } from "@/lib/serialization";
 import { EmptyCreate } from "@/components/empty-create";
 import { FileOptions } from "@/components/file/file-options";
 import { RepoActionButtons } from "@/components/repo/repo-action-buttons";
@@ -112,6 +111,7 @@ export function Entry({
   const [viewMode, setViewMode] = useState<"edit" | "preview">("edit");
   const [hasRegisteredChanges, setHasRegisteredChanges] = useState(false);
   const [error, setError] = useState<string | undefined | null>(null);
+  const [savedVersion, setSavedVersion] = useState(0);
   const changeVersionRef = useRef(0);
   const { mutate } = useSWRConfig();
 
@@ -398,6 +398,8 @@ export function Entry({
       if (submitStartChangeVersion === changeVersionRef.current) {
         setHasRegisteredChanges(false);
       }
+      // Bump save version so preview iframe reloads with fresh committed state
+      setSavedVersion((v) => v + 1);
     } catch (error: unknown) {
       if (error instanceof Error) {
         console.error(error.message);
@@ -797,20 +799,6 @@ export function Entry({
     }
   }
   
-  // Build preview content from current form state
-  const previewContent = useMemo(() => {
-    if (viewMode !== "preview" || !entryContentObject) return "";
-    try {
-      const format = schema?.format || "yaml-frontmatter";
-      if (format === "json") {
-        return JSON.stringify(entryContentObject, null, 2);
-      }
-      return stringify(entryContentObject, { format });
-    } catch {
-      return "";
-    }
-  }, [viewMode, entryContentObject, schema?.format]);
-
   return (
     isLoading
       ? loadingSkeleton
@@ -845,9 +833,9 @@ export function Entry({
 
         {viewMode === "preview" ? (
           <PreviewPanel
-            content={previewContent}
             filePath={path || undefined}
             format={schema?.format === "json" ? "json" : "markdown"}
+            renderVersion={savedVersion}
           />
         ) : (
         <EntryForm

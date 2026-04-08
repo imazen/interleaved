@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useConfig } from "@/contexts/config-context";
 import { DocumentTitle, formatRepoBranchTitle } from "@/components/document-title";
 import { useRepoHeader } from "@/components/repo/repo-header-context";
@@ -16,42 +16,32 @@ const WIDTHS: Record<Device, string> = {
   desktop: "100%",
 };
 
+const WORKER_URL =
+  (typeof process !== "undefined" && process.env.NEXT_PUBLIC_PREVIEW_WORKER_URL) ||
+  "https://preview.interleaved.app";
+
 export default function SitePreviewPage() {
   const { config } = useConfig();
+  const iframeRef = useRef<HTMLIFrameElement>(null);
   const [device, setDevice] = useState<Device>("desktop");
-  const [html, setHtml] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [bustCounter, setBustCounter] = useState(0);
 
-  const reload = async () => {
-    if (!config) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(
-        `/api/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/preview`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mode: "site" }),
-        },
-      );
-      if (!response.ok) {
-        setError(`Preview failed: HTTP ${response.status}`);
-        return;
-      }
-      setHtml(await response.text());
-    } catch (e: any) {
-      setError(e.message || "Preview failed");
-    } finally {
-      setLoading(false);
-    }
+  const iframeSrc = useMemo(() => {
+    if (!config) return "";
+    const params = new URLSearchParams({
+      owner: config.owner,
+      repo: config.repo,
+      branch: config.branch,
+    });
+    if (bustCounter > 0) params.set("v", String(bustCounter));
+    return `${WORKER_URL}/?${params.toString()}`;
+  }, [config, bustCounter]);
+
+  const reload = () => {
+    setLoaded(false);
+    setBustCounter((v) => v + 1);
   };
-
-  useEffect(() => {
-    reload();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config?.branch]);
 
   useRepoHeader({
     header: (
@@ -84,14 +74,21 @@ export default function SitePreviewPage() {
               <Monitor className="size-4" />
             </Button>
           </div>
+          {iframeSrc && (
+            <Button variant="ghost" size="icon-sm" asChild title="Open in new tab">
+              <a href={iframeSrc} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="size-4" />
+              </a>
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon-sm"
             onClick={reload}
-            disabled={loading}
+            disabled={!loaded}
             title="Refresh"
           >
-            <RefreshCw className={cn("size-4", loading && "animate-spin")} />
+            <RefreshCw className={cn("size-4", !loaded && "animate-spin")} />
           </Button>
         </div>
       </div>
@@ -100,21 +97,27 @@ export default function SitePreviewPage() {
 
   return (
     <>
-      <DocumentTitle title={formatRepoBranchTitle("Preview", config?.owner || "", config?.repo || "", config?.branch)} />
+      <DocumentTitle
+        title={formatRepoBranchTitle(
+          "Preview",
+          config?.owner || "",
+          config?.repo || "",
+          config?.branch,
+        )}
+      />
       <div className="flex flex-col h-[calc(100vh-8rem)] md:h-[calc(100vh-7rem)]">
-        <div className="flex-1 overflow-auto bg-gray-50 dark:bg-gray-900 flex justify-center">
-          {error ? (
-            <div className="flex flex-col items-center justify-center p-8 text-sm text-muted-foreground gap-2">
-              <p>{error}</p>
-              <Button variant="outline" size="sm" onClick={reload}>Retry</Button>
-            </div>
-          ) : html === null ? (
-            <Skeleton className="w-full h-full" />
-          ) : (
+        <div className="flex-1 overflow-auto bg-gray-50 dark:bg-gray-900 flex justify-center relative">
+          {!loaded && iframeSrc && (
+            <Skeleton className="absolute inset-0 w-full h-full" />
+          )}
+          {iframeSrc && (
             <iframe
+              ref={iframeRef}
               title="Site preview"
-              srcDoc={html}
-              sandbox="allow-same-origin allow-scripts"
+              src={iframeSrc}
+              sandbox="allow-same-origin"
+              referrerPolicy="no-referrer"
+              onLoad={() => setLoaded(true)}
               className={cn(
                 "bg-white border-0 h-full transition-all",
                 device === "desktop" ? "w-full" : "shadow-lg rounded-lg my-4",

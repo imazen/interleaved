@@ -1,0 +1,10 @@
+{
+  "name": "interleaved-preview-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "handlebars": "^4.7.9",
+    "marked": "^18.0.0"
+  }
+}
