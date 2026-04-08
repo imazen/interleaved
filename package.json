@@ -7,6 +7,9 @@
   },
   "version": "2.1.3",
   "private": true,
+  "engines": {
+    "node": ">=20.9.0"
+  },
   "scripts": {
     "setup:github-app": "node scripts/setup-github-app.mjs",
     "dev": "next dev",
