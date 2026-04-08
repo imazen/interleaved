@@ -4,10 +4,16 @@ import { useState, useEffect } from "react";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { getVisits } from "@/lib/tracker";
 import { Skeleton } from "@/components/ui/skeleton";
-import { GitBranch } from "lucide-react";
+import { ChevronDown, GitBranch } from "lucide-react";
 
 type Visit = { owner: string; repo: string; branch: string; timestamp: number };
 
@@ -164,36 +170,33 @@ export function RepoLatest() {
                 </li>
               ))}
 
-              {/* Other branches (not yet visited) */}
+              {/* Other branches dropdown */}
               {repo.allBranches === null ? (
                 <li className="px-3 py-2 text-xs text-muted-foreground italic">
-                  Loading other branches...
+                  Loading branches...
                 </li>
               ) : otherBranches.length > 0 ? (
-                <>
-                  <li className="px-3 pt-2 pb-1 text-xs text-muted-foreground uppercase tracking-wide">
-                    Other branches
-                  </li>
-                  {otherBranches.slice(0, 8).map((branch) => (
-                    <li
-                      key={branch}
-                      className="flex items-center gap-2 px-3 py-1.5 text-sm border-b last:border-b-0 hover:bg-muted/30 transition-colors"
-                    >
-                      <GitBranch className="size-3.5 text-muted-foreground/60 shrink-0" />
-                      <Link
-                        href={`/${repo.owner}/${repo.repo}/${encodeURIComponent(branch)}`}
-                        className="truncate hover:underline flex-1 min-w-0 text-muted-foreground"
-                      >
-                        {branch}
-                      </Link>
-                    </li>
-                  ))}
-                  {otherBranches.length > 8 && (
-                    <li className="px-3 py-1.5 text-xs text-muted-foreground italic">
-                      +{otherBranches.length - 8} more
-                    </li>
-                  )}
-                </>
+                <li className="px-3 py-2 border-t">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                        <GitBranch className="size-3" />
+                        {otherBranches.length} other {otherBranches.length === 1 ? "branch" : "branches"}
+                        <ChevronDown className="size-3" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto">
+                      {otherBranches.map((branch) => (
+                        <DropdownMenuItem key={branch} asChild>
+                          <Link href={`/${repo.owner}/${repo.repo}/${encodeURIComponent(branch)}`}>
+                            <GitBranch className="size-3 mr-1.5" />
+                            <span className="truncate">{branch}</span>
+                          </Link>
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </li>
               ) : null}
             </ul>
           </li>

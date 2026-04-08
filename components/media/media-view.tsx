@@ -60,14 +60,46 @@ function MediaHeaderActions({
   mediaName,
   path,
   onFolderCreate,
+  mediaSource,
+  onMediaSourceChange,
+  externalAvailable,
 }: {
   actionNode?: ReactNode;
   mediaName: string;
   path: string;
   onFolderCreate: (entry: unknown) => void;
+  mediaSource: "external" | "git";
+  onMediaSourceChange: (s: "external" | "git") => void;
+  externalAvailable: boolean;
 }) {
   return (
     <div className="flex items-center gap-x-2 shrink-0">
+      {externalAvailable && (
+        <div className="inline-flex h-8 items-center rounded-md bg-muted p-0.5 text-muted-foreground">
+          <button
+            type="button"
+            onClick={() => onMediaSourceChange("external")}
+            className={cn(
+              "h-7 px-2.5 rounded-sm text-xs transition-colors",
+              mediaSource === "external" && "bg-background text-foreground shadow-sm",
+            )}
+            title="Cloud storage (R2/S3)"
+          >
+            Cloud
+          </button>
+          <button
+            type="button"
+            onClick={() => onMediaSourceChange("git")}
+            className={cn(
+              "h-7 px-2.5 rounded-sm text-xs transition-colors",
+              mediaSource === "git" && "bg-background text-foreground shadow-sm",
+            )}
+            title="Theme assets in git"
+          >
+            Git
+          </button>
+        </div>
+      )}
       {actionNode}
       <Tooltip>
         <TooltipTrigger asChild>
@@ -285,9 +317,26 @@ const MediaView = ({
     });
   }, []);
   
+  // Source toggle: "external" (R2/S3 — default when configured) or "git"
+  const [mediaSource, setMediaSource] = useState<"external" | "git">("external");
+  const [externalAvailable, setExternalAvailable] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/media-config")
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data?.storage === "external") {
+          setExternalAvailable(true);
+        } else {
+          setMediaSource("git");
+        }
+      })
+      .catch(() => { /* leave defaults */ });
+  }, []);
+
   const buildMediaApiUrl = useCallback((targetPath: string): string => (
-    `/api/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/media/${encodeURIComponent(mediaConfig.name)}/${encodeURIComponent(targetPath)}`
-  ), [config.branch, config.owner, config.repo, mediaConfig.name]);
+    `/api/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/media/${encodeURIComponent(mediaConfig.name)}/${encodeURIComponent(targetPath)}?source=${mediaSource}`
+  ), [config.branch, config.owner, config.repo, mediaConfig.name, mediaSource]);
 
   const mediaKey = useMemo(() => buildMediaApiUrl(path), [buildMediaApiUrl, path]);
   const fetchMediaByUrl = useCallback(async (apiUrl: string): Promise<MediaItem[]> => {
@@ -592,10 +641,13 @@ const MediaView = ({
           mediaName={mediaConfig.name}
           path={path}
           onFolderCreate={handleFolderCreate}
+          mediaSource={mediaSource}
+          onMediaSourceChange={setMediaSource}
+          externalAvailable={externalAvailable}
         />
       </MediaUpload>
     </div>
-  ), [breadcrumbNode, config.branch, config.owner, config.repo, filteredExtensions, handleFolderCreate, handleUpload, mediaActions, mediaConfig.input, mediaConfig.label, mediaConfig.name, mediaConfig.output, path]);
+  ), [breadcrumbNode, config.branch, config.owner, config.repo, filteredExtensions, handleFolderCreate, handleUpload, mediaActions, mediaConfig.input, mediaConfig.label, mediaConfig.name, mediaConfig.output, path, mediaSource, externalAvailable]);
 
   useOptionalRepoHeader(
     { header: headerNode },
@@ -734,6 +786,9 @@ const MediaView = ({
               mediaName={mediaConfig.name}
               path={path}
               onFolderCreate={handleFolderCreate}
+              mediaSource={mediaSource}
+              onMediaSourceChange={setMediaSource}
+              externalAvailable={externalAvailable}
             />
           </header>
           {mediaGrid}

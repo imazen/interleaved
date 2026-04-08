@@ -56,6 +56,11 @@ export function PreviewPanel({
     setError(null);
 
     try {
+      // Detect data files (e.g., _data/site.json) — these affect the whole
+      // site, so we render the index page with the proposed data
+      const isDataFile = !!filePath?.match(/^_?data\//);
+      const previewMode = isDataFile ? "data" : "entry";
+
       const response = await fetch(
         `/api/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/preview`,
         {
@@ -65,6 +70,7 @@ export function PreviewPanel({
             path: filePath,
             content,
             format: format || (filePath?.endsWith(".json") ? "json" : "markdown"),
+            mode: previewMode,
           }),
         },
       );

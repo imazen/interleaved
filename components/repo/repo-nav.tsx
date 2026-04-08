@@ -8,7 +8,7 @@ import { useUser } from "@/contexts/user-context";
 import { hasGithubIdentity } from "@/lib/authz-shared";
 import { isConfigEnabled } from "@/lib/config";
 import { cn } from "@/lib/utils";
-import { FileStack, FileText, FolderOpen, Settings, Users } from "lucide-react";
+import { Eye, FileStack, FileText, FolderOpen, Settings, Users } from "lucide-react";
 
 const RepoNavItem = ({
   children,
@@ -85,9 +85,17 @@ const RepoNav = ({
       }
       : null;
 
+    const previewItem = {
+      key: "preview",
+      icon: <Eye className="h-5 w-5 mr-2" />,
+      href: `/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/preview`,
+      label: "Preview site",
+    };
+
     return [
       ...contentItems,
       ...mediaItems,
+      previewItem,
       settingsItem,
       collaboratorsItem
     ].filter(Boolean);

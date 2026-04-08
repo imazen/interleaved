@@ -38,11 +38,15 @@ export async function GET(
 
     const { searchParams } = new URL(request.url);
     const nocache = searchParams.get('nocache');
+    // Allow client to override storage source: ?source=git or ?source=external
+    const sourceOverride = searchParams.get("source");
+    const useExternal = sourceOverride === "external"
+      || (sourceOverride !== "git" && isExternalStorageConfigured());
 
     let results;
 
     // Use external storage when configured (default for media)
-    if (isExternalStorageConfigured()) {
+    if (useExternal) {
       try {
         const repoId = await getRepoId(token, params.owner, params.repo);
         const provider = createMediaProvider(repoId);
