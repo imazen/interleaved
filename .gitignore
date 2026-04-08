@@ -40,6 +40,8 @@ next-env.d.ts
 
 # Logo drafts
 public/logo*
+!public/logo.svg
+!public/logo-square.svg
 
 # Database
 local.db
