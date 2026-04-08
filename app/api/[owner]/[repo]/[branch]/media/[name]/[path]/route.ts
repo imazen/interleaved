@@ -2,6 +2,7 @@ import { getRepoReadContext } from "@/lib/api-repo-context";
 import { getFileExtension, normalizePath } from "@/lib/utils/file";
 import { getMediaCache } from "@/lib/github-cache-file";
 import { createHttpError, toErrorResponse } from "@/lib/api-error";
+import { isExternalStorageConfigured, createMediaProvider } from "@/lib/media/provider";
 
 /**
  * Get the list of media files in a directory.
@@ -38,13 +39,36 @@ export async function GET(
     const nocache = searchParams.get('nocache');
 
     let results;
-    try {
-      results = await getMediaCache(params.owner, params.repo, params.branch, normalizedPath, token, !!nocache);
-    } catch (error: any) {
-      if (error?.status === 404) {
-        results = [];
-      } else {
-        throw error;
+
+    // Use external storage when configured (default for media)
+    if (isExternalStorageConfigured()) {
+      try {
+        const provider = createMediaProvider();
+        const files = await provider.listFiles(normalizedPath);
+        results = files.map((f) => ({
+          type: f.type,
+          sha: f.sha,
+          name: f.name,
+          path: f.path,
+          size: f.size,
+          downloadUrl: f.url,
+        }));
+      } catch (error: any) {
+        if (error?.name === "NoSuchKey" || error?.$metadata?.httpStatusCode === 404) {
+          results = [];
+        } else {
+          throw error;
+        }
+      }
+    } else {
+      try {
+        results = await getMediaCache(params.owner, params.repo, params.branch, normalizedPath, token, !!nocache);
+      } catch (error: any) {
+        if (error?.status === 404) {
+          results = [];
+        } else {
+          throw error;
+        }
       }
     }
 

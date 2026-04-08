@@ -13,6 +13,7 @@ import { createHttpError, toErrorResponse } from "@/lib/api-error";
 import mergeWith from "lodash.mergewith";
 import { buildCommitTokens, resolveCommitIdentity, resolveCommitMessage } from "@/lib/commit-message";
 import { requireApiUserSession } from "@/lib/session-server";
+import { isExternalStorageConfigured, createMediaProvider } from "@/lib/media/provider";
 
 /**
  * Create, update and delete individual files in a GitHub repository.
@@ -165,15 +166,37 @@ export async function POST(
         schemaCommitIdentity = schema?.commit?.identity;
 
         if (!normalizedPath.startsWith(schema.input)) throw new Error(`Invalid path "${params.path}" for media "${data.name}".`);
-        
+
         if (getFileName(normalizedPath) === ".gitkeep") {
-          // Folder creation
+          // Folder creation — always git
           contentBase64 = "";
         } else {
           if (
             schema.extensions?.length > 0 &&
             !schema.extensions.includes(getFileExtension(normalizedPath))
           ) throw new Error(`Invalid extension "${getFileExtension(normalizedPath)}" for media.`);
+
+          // Route media to external storage when configured (default)
+          if (isExternalStorageConfigured()) {
+            const provider = createMediaProvider();
+            const result = await provider.uploadFile(normalizedPath, data.content, {
+              contentType: data.contentType,
+            });
+
+            return Response.json({
+              status: "success",
+              message: `File "${normalizedPath}" uploaded to external storage.`,
+              data: {
+                type: "file",
+                sha: undefined,
+                name: result.name,
+                path: result.path,
+                extension: result.extension,
+                size: result.size,
+                url: result.url,
+              },
+            });
+          }
 
           contentBase64 = data.content;
         }
