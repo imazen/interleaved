@@ -5,6 +5,7 @@
   "type": "module",
   "dependencies": {
     "handlebars": "^4.7.9",
-    "marked": "^18.0.0"
+    "marked": "^18.0.0",
+    "mustache": "^4.2.0"
   }
 }

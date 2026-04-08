@@ -1,80 +1,118 @@
 /**
- * Site renderer for the preview worker.
+ * Site renderer for the preview worker — Mustache + marked.
  *
- * Handlebars + marked bundled via wrangler. Mirrors lib/renderer/index.ts
- * but standalone so the worker doesn't depend on the Next.js app bundle.
+ * Uses Mustache (not Handlebars) because Cloudflare Workers block
+ * dynamic code generation (`new Function`, `eval`), which Handlebars
+ * requires for template compilation. Mustache is pure string parsing.
+ *
+ * Mustache is logic-less by design:
+ * - {{var}} → escaped
+ * - {{{var}}} → unescaped
+ * - {{#section}}...{{/section}} → iteration / truthy check
+ * - {{^section}}...{{/section}} → inverted / falsy check
+ * - {{> partial}} → partial
+ * - No inline helpers — preprocess data before rendering.
  */
 
-import Handlebars from "handlebars";
+import Mustache from "mustache";
 import { marked } from "marked";
+import { handlebarsToMustache } from "./compat.js";
+
+// Don't HTML-escape within sections that we've already marked safe
+Mustache.escape = (text) => {
+  return String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+};
+
+const DATE_FMT = new Intl.DateTimeFormat("en-US", {
+  year: "numeric",
+  month: "long",
+  day: "numeric",
+});
+
+function formatDate(input) {
+  if (!input) return "";
+  const d = new Date(input);
+  if (isNaN(d.getTime())) return String(input);
+  return DATE_FMT.format(d);
+}
+
+function truncate(text, len = 120) {
+  if (!text || typeof text !== "string") return "";
+  if (text.length <= len) return text;
+  return text.slice(0, len) + "...";
+}
+
+function stripFrontmatter(content) {
+  return content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "");
+}
+
+/**
+ * Preprocess a data object so templates can use formatted/computed values
+ * without needing Handlebars-style helpers. Attaches:
+ *   _formatted: pre-computed versions of common fields
+ *   _truncated_120: first 120 chars of string fields
+ */
+function preprocessData(obj) {
+  if (obj === null || obj === undefined) return obj;
+  if (Array.isArray(obj)) return obj.map(preprocessData);
+  if (typeof obj !== "object") return obj;
+  if (obj instanceof Date) return obj;
+
+  const result = { ...obj };
+
+  // Pre-format date-looking fields
+  const dateFields = ["date", "publishedAt", "published", "created", "updated", "modifiedAt"];
+  for (const key of dateFields) {
+    if (obj[key] && typeof obj[key] === "string") {
+      result[`${key}_formatted`] = formatDate(obj[key]);
+      result[`${key}_iso`] = new Date(obj[key]).toISOString();
+    }
+  }
+
+  // Pre-truncate description fields
+  const textFields = ["description", "summary", "excerpt", "body"];
+  for (const key of textFields) {
+    if (obj[key] && typeof obj[key] === "string") {
+      result[`${key}_truncated`] = truncate(obj[key], 120);
+    }
+  }
+
+  // Recurse into nested objects/arrays
+  for (const key of Object.keys(result)) {
+    if (key.endsWith("_formatted") || key.endsWith("_iso") || key.endsWith("_truncated")) continue;
+    if (typeof result[key] === "object" && result[key] !== null) {
+      result[key] = preprocessData(result[key]);
+    }
+  }
+
+  return result;
+}
 
 export class WorkerRenderer {
   constructor() {
-    this.hbs = Handlebars.create();
     this.templates = new Map();
+    this.partials = {}; // Mustache.render expects an object
     this.data = new Map();
-    this.registerHelpers();
-  }
-
-  registerHelpers() {
-    this.hbs.registerHelper("formatDate", (dateStr, format) => {
-      if (!dateStr) return "";
-      const d = new Date(dateStr);
-      if (isNaN(d.getTime())) return dateStr;
-      if (format === "iso") return d.toISOString();
-      return d.toLocaleDateString("en-US", {
-        year: "numeric", month: "long", day: "numeric",
-      });
-    });
-
-    this.hbs.registerHelper("truncate", (str, len) => {
-      if (!str || typeof str !== "string") return "";
-      if (str.length <= len) return str;
-      return str.slice(0, len) + "...";
-    });
-
-    this.hbs.registerHelper("json", (context) => {
-      return new Handlebars.SafeString(
-        `<pre>${Handlebars.Utils.escapeExpression(JSON.stringify(context, null, 2))}</pre>`,
-      );
-    });
-
-    this.hbs.registerHelper("md", (text) => {
-      if (!text) return "";
-      const escaped = Handlebars.Utils.escapeExpression(text);
-      return new Handlebars.SafeString(marked.parseInline(escaped));
-    });
-
-    this.hbs.registerHelper("eq", (a, b) => a === b);
-
-    this.hbs.registerHelper("slice", (arr, start, end) => {
-      if (!Array.isArray(arr)) return [];
-      return end !== undefined ? arr.slice(start, end) : arr.slice(start);
-    });
-
-    this.hbs.registerHelper("sortBy", (arr, field, order) => {
-      if (!Array.isArray(arr)) return [];
-      const sorted = [...arr].sort((a, b) => {
-        const va = a?.[field];
-        const vb = b?.[field];
-        if (va < vb) return -1;
-        if (va > vb) return 1;
-        return 0;
-      });
-      return order === "desc" ? sorted.reverse() : sorted;
-    });
   }
 
   registerTemplate(name, source) {
-    this.templates.set(name, this.hbs.compile(source));
+    const compat = handlebarsToMustache(source);
+    this.templates.set(name, compat);
+    // Also make templates usable as partials via their name
+    this.partials[name] = compat;
   }
 
   registerPartial(name, source) {
-    this.hbs.registerPartial(name, source);
+    this.partials[name] = handlebarsToMustache(source);
   }
 
   registerData(name, value) {
-    this.data.set(name, value);
+    this.data.set(name, preprocessData(value));
   }
 
   getGlobalData() {
@@ -84,8 +122,7 @@ export class WorkerRenderer {
   }
 
   /**
-   * Parse YAML-frontmatter markdown. Minimal parser — no full YAML,
-   * just the common key: value and list forms.
+   * Parse YAML frontmatter from markdown content (minimal parser).
    */
   parseFrontmatter(content) {
     const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)/);
@@ -93,19 +130,16 @@ export class WorkerRenderer {
 
     const frontmatter = {};
     const lines = match[1].split("\n");
-    let currentKey = null;
-    let currentArray = null;
+    let currentArrayKey = null;
 
     for (const line of lines) {
-      if (line.match(/^\s*-\s/)) {
-        if (currentArray) {
-          let value = line.replace(/^\s*-\s*/, "").trim();
-          if ((value.startsWith('"') && value.endsWith('"')) ||
-              (value.startsWith("'") && value.endsWith("'"))) {
-            value = value.slice(1, -1);
-          }
-          currentArray.push(value);
+      if (line.match(/^\s+-\s/) && currentArrayKey) {
+        let value = line.replace(/^\s+-\s*/, "").trim();
+        if ((value.startsWith('"') && value.endsWith('"')) ||
+            (value.startsWith("'") && value.endsWith("'"))) {
+          value = value.slice(1, -1);
         }
+        frontmatter[currentArrayKey].push(value);
         continue;
       }
 
@@ -114,15 +148,12 @@ export class WorkerRenderer {
 
       const [, key, rest] = kv;
       if (rest.trim() === "") {
-        // Next lines may be a list
-        currentKey = key;
-        currentArray = [];
-        frontmatter[key] = currentArray;
+        currentArrayKey = key;
+        frontmatter[key] = [];
         continue;
       }
 
-      currentArray = null;
-      currentKey = key;
+      currentArrayKey = null;
       let value = rest.trim();
       if ((value.startsWith('"') && value.endsWith('"')) ||
           (value.startsWith("'") && value.endsWith("'"))) {
@@ -137,27 +168,40 @@ export class WorkerRenderer {
     return { frontmatter, body: match[2] || "" };
   }
 
+  /**
+   * Render a markdown content file through its layout template.
+   */
   renderMarkdown(filePath, content) {
     const { frontmatter, body } = this.parseFrontmatter(content);
     const bodyHtml = marked.parse(body);
 
     const layoutName = frontmatter.layout || "post";
-    const template = this.templates.get(layoutName)
-      || this.templates.get("post")
-      || this.templates.get("base");
+    const source =
+      this.templates.get(layoutName) ||
+      this.templates.get("post") ||
+      this.templates.get("base") ||
+      this.templates.get("index");
 
+    const processed = preprocessData(frontmatter);
     const context = {
       ...this.getGlobalData(),
-      ...frontmatter,
-      content: new Handlebars.SafeString(bodyHtml),
-      body: new Handlebars.SafeString(bodyHtml),
-      page: frontmatter,
+      ...processed,
+      content: bodyHtml,
+      body: bodyHtml,
+      page: processed,
     };
 
-    const html = template ? template(context) : bodyHtml;
+    const html = source
+      ? Mustache.render(source, context, this.partials)
+      : bodyHtml;
+
     return { html, frontmatter, path: filePath };
   }
 
+  /**
+   * Render a JSON data file. Falls back to rendering through a layout if
+   * one is specified, else returns a pretty-printed JSON display.
+   */
   renderJson(filePath, content, templateName) {
     let data;
     try {
@@ -171,34 +215,69 @@ export class WorkerRenderer {
     }
 
     const layout = templateName || data.layout || "base";
-    const template = this.templates.get(layout) || this.templates.get("base");
+    const source =
+      this.templates.get(layout) ||
+      this.templates.get("base") ||
+      this.templates.get("index");
 
+    const processed = preprocessData(data);
     const context = {
       ...this.getGlobalData(),
-      ...data,
-      page: data,
+      ...processed,
+      page: processed,
     };
 
-    const html = template ? template(context) : `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+    if (!source) {
+      return {
+        html: `<pre>${JSON.stringify(data, null, 2)}</pre>`,
+        frontmatter: data,
+        path: filePath,
+      };
+    }
+
+    const html = Mustache.render(source, context, this.partials);
     return { html, frontmatter: data, path: filePath };
   }
 
+  /**
+   * Render the site's index template with all collection items available
+   * as `posts` (or a custom key).
+   */
   renderCollectionIndex(templateName, items, collectionName = "posts") {
-    const template = this.templates.get(templateName)
-      || this.templates.get("index")
-      || this.templates.get("base");
+    const source =
+      this.templates.get(templateName) ||
+      this.templates.get("index") ||
+      this.templates.get("index.html") ||
+      this.templates.get("base") ||
+      this.templates.get("base.html") ||
+      (this.templates.size > 0 ? this.templates.values().next().value : null);
 
-    if (!template) return "";
+    if (!source) return "";
+
+    // Sort items by date descending (most recent first) since that's the
+    // most common use case. Template can re-sort if needed.
+    const sortedItems = [...items].sort((a, b) => {
+      const da = new Date(a.frontmatter?.date || 0).getTime();
+      const db = new Date(b.frontmatter?.date || 0).getTime();
+      return db - da;
+    });
+
+    const processed = sortedItems.map((item) => {
+      const fm = preprocessData(item.frontmatter || {});
+      return {
+        ...fm,
+        url: `/${(item.path || "").replace(/\.(md|mdx|markdown)$/i, ".html")}`,
+        content: item.html || "",
+      };
+    });
 
     const context = {
       ...this.getGlobalData(),
-      [collectionName]: items.map((item) => ({
-        ...item.frontmatter,
-        url: `/${item.path.replace(/\.(md|mdx|markdown)$/i, ".html")}`,
-        content: item.html || "",
-      })),
+      [collectionName]: processed,
+      // Also expose under `items` for templates that don't want to assume a name
+      items: processed,
     };
 
-    return template(context);
+    return Mustache.render(source, context, this.partials);
   }
 }
