@@ -29,6 +29,13 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { ChevronsUpDown, ArrowUpRight } from "lucide-react";
 
+function sanitizeSvg(html: string): string {
+  return html
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+    .replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(/href\s*=\s*["']?\s*javascript:/gi, 'href="');
+}
+
 export function RepoTemplates({ defaultAccount }: { defaultAccount?: any }) {
   const { user } = useUser();
   const router = useRouter();
@@ -127,7 +134,7 @@ export function RepoTemplates({ defaultAccount }: { defaultAccount?: any }) {
                   />
                   <div className="flex gap-x-2 items-center px-3 py-2 border-t border-t-accent text-sm">
                     <div
-                      dangerouslySetInnerHTML={{ __html: template.icon }}
+                      dangerouslySetInnerHTML={{ __html: sanitizeSvg(template.icon) }}
                       className="w-4 h-4 shrink-0"
                     />
                     <div className="font-medium truncate">{template.name}</div>

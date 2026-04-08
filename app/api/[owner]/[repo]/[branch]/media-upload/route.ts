@@ -73,6 +73,12 @@ export async function POST(
       throw createHttpError("path and content (base64) are required", 400);
     }
 
+    // 50 MB base64 limit (~37.5 MB raw)
+    const MAX_CONTENT_LENGTH = 50 * 1024 * 1024;
+    if (typeof data.content !== "string" || data.content.length > MAX_CONTENT_LENGTH) {
+      throw createHttpError("File content exceeds the 50 MB upload limit", 413);
+    }
+
     const result = await provider.uploadFile(data.path, data.content, {
       contentType: data.contentType,
     });

@@ -58,6 +58,8 @@ export async function POST(
       headers: {
         "Content-Type": "text/html; charset=utf-8",
         "X-Frame-Options": "SAMEORIGIN",
+        "Content-Security-Policy": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; script-src 'none'",
+        "X-Content-Type-Options": "nosniff",
       },
     });
   } catch (error: any) {

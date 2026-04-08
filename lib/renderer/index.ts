@@ -64,9 +64,11 @@ export class SiteRenderer {
     });
 
     // Markdown inline rendering (for descriptions etc.)
+    // Escape HTML first to prevent XSS in frontmatter values rendered inline.
     this.hbs.registerHelper("md", (text: string) => {
       if (!text) return "";
-      return new Handlebars.SafeString(marked.parseInline(text) as string);
+      const escaped = Handlebars.Utils.escapeExpression(text);
+      return new Handlebars.SafeString(marked.parseInline(escaped) as string);
     });
 
     // Equality check

@@ -117,9 +117,27 @@ export function middleware(request: NextRequest) {
     }
   }
 
+  // --- Rate limiting for webhook routes (higher limit) ---
+  if (pathname.startsWith("/api/webhook/")) {
+    cleanup();
+    const ip = getClientIp(request);
+    const now = Date.now();
+    const webhookKey = `webhook:${ip}`;
+    let entry = store.get(webhookKey);
+    if (!entry || entry.resetAt < now) {
+      entry = { count: 0, resetAt: now + WINDOW_MS };
+      store.set(webhookKey, entry);
+    }
+    entry.count++;
+    if (entry.count > MAX_REQUESTS * 5) {
+      return new NextResponse(null, { status: 429 });
+    }
+  }
+
   // --- Set x-return-to header for auth redirects (from proxy.ts) ---
   const requestHeaders = new Headers(request.headers);
-  requestHeaders.set("x-return-to", `${pathname}${request.nextUrl.search}`);
+  const safeReturnTo = `${pathname}${request.nextUrl.search}`.replace(/[\r\n]/g, "");
+  requestHeaders.set("x-return-to", safeReturnTo);
 
   return NextResponse.next({
     request: { headers: requestHeaders },

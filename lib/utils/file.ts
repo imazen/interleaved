@@ -59,6 +59,10 @@ function normalizePath(path: string): string {
     return acc;
   }, []);
 
+  if (normalizedPathSegments.some(seg => seg === "..")) {
+    throw new Error("Path traversal not allowed");
+  }
+
   return normalizedPathSegments.join("/");
 }
 

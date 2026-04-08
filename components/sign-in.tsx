@@ -18,7 +18,7 @@ export function SignIn() {
   const searchParams = useSearchParams();
   const error = searchParams.get("error") || "";
   const redirectParam = searchParams.get("redirect") || "";
-  const callbackURL = redirectParam.startsWith("/") ? redirectParam : "/";
+  const callbackURL = (redirectParam.startsWith("/") && !redirectParam.startsWith("//")) ? redirectParam : "/";
   const errorCallbackURL =
     callbackURL === "/"
       ? "/sign-in"
