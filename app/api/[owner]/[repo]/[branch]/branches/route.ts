@@ -4,10 +4,53 @@ import { createHttpError, toErrorResponse } from "@/lib/api-error";
 import { requireApiUserSession } from "@/lib/session-server";
 
 /**
+ * List branches in a repository.
+ *
+ * GET /api/[owner]/[repo]/[branch]/branches
+ *
+ * Requires authentication. The [branch] in the URL is just for routing
+ * context (which branch the user is currently viewing) — listing returns
+ * all branches.
+ */
+export async function GET(
+  _request: Request,
+  context: { params: Promise<{ owner: string; repo: string; branch: string }> },
+) {
+  try {
+    const params = await context.params;
+    const sessionResult = await requireApiUserSession();
+    if ("response" in sessionResult) return sessionResult.response;
+    const user = sessionResult.user;
+
+    const { token } = await getToken(user, params.owner, params.repo);
+    if (!token) throw createHttpError("Token not found", 401);
+
+    const octokit = createOctokitInstance(token);
+    const branches = await octokit.paginate(octokit.rest.repos.listBranches, {
+      owner: params.owner,
+      repo: params.repo,
+      per_page: 100,
+    });
+
+    return Response.json({
+      status: "success",
+      data: branches.map((b) => ({
+        name: b.name,
+        protected: b.protected,
+        sha: b.commit?.sha,
+      })),
+    });
+  } catch (error: any) {
+    console.error(error);
+    return toErrorResponse(error);
+  }
+}
+
+/**
  * Creates a new branch in a GitHub repository.
- * 
+ *
  * POST /api/[owner]/[repo]/[branch]/branches
- * 
+ *
  * Requires authentication.
  */
 
