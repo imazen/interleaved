@@ -18,6 +18,7 @@
 import { getRepoToken } from "./github-auth.js";
 import { getBranchSha, getTree, fetchBlobs, filterByPrefix } from "./github-tree.js";
 import { WorkerRenderer } from "./renderer.js";
+import { loadMapping, resolvePreview } from "./preview-mapping.js";
 
 const ALLOWED_PARENTS = [
   "https://interleaved.app",
@@ -71,7 +72,7 @@ export default {
       // 3. Fetch the full recursive tree at this SHA
       const tree = await getTree(token, owner, repo, sha);
 
-      // 4. Identify files we need: templates, data, content
+      // 4. Identify files we need: templates, data, content, mapping
       const templateEntries = filterByPrefix(tree, "templates/", /\.html$/i);
       const dataEntries = filterByPrefix(tree, "data/", /\.json$/i);
       const altDataEntries = filterByPrefix(tree, "_data/", /\.json$/i);
@@ -86,21 +87,58 @@ export default {
         }
       }
 
+      const mappingEntry = tree.find((t) => t.path === ".interleaved/mapping.json");
+      const mappingEntries = mappingEntry ? [mappingEntry] : [];
+
       // 5. Fetch all blobs in parallel
-      const [templates, data, altData, posts] = await Promise.all([
+      const [templates, data, altData, posts, mappingBlobs] = await Promise.all([
         fetchBlobs(token, owner, repo, templateEntries),
         fetchBlobs(token, owner, repo, dataEntries),
         fetchBlobs(token, owner, repo, altDataEntries),
         fetchBlobs(token, owner, repo, postEntries),
+        fetchBlobs(token, owner, repo, mappingEntries),
       ]);
 
-      // 6. If we're rendering a specific entry, fetch that too (if not already loaded)
+      const mapping = loadMapping(mappingBlobs);
+      const allBlobs = { ...templates, ...data, ...altData, ...posts, ...mappingBlobs };
+
+      // 6. Resolve what to actually render based on the requested entry
       let entryContent = "";
+      let renderMode = "index";
+      let renderContentPath = "";
+      let renderUrl = "";
+
       if (entry) {
+        // Fetch the raw entry so resolvePreview can inspect frontmatter
         const entryTreeItem = tree.find((t) => t.path === entry);
         if (entryTreeItem) {
           const fetched = await fetchBlobs(token, owner, repo, [entryTreeItem]);
           entryContent = fetched[entry] || "";
+          allBlobs[entry] = entryContent;
+        }
+
+        const resolved = resolvePreview(entry, allBlobs, mapping, tree);
+        renderMode = resolved.mode;
+        if (resolved.mode === "entry") {
+          renderContentPath = resolved.contentPath || entry;
+          // Fetch the resolved content file if it's different from the entry
+          if (renderContentPath !== entry) {
+            const resolvedTreeItem = tree.find((t) => t.path === renderContentPath);
+            if (resolvedTreeItem) {
+              const fetched = await fetchBlobs(token, owner, repo, [resolvedTreeItem]);
+              entryContent = fetched[renderContentPath] || "";
+            }
+          }
+        } else if (resolved.mode === "url") {
+          renderUrl = resolved.url || "/";
+          if (resolved.contentPath) {
+            renderContentPath = resolved.contentPath;
+            const resolvedTreeItem = tree.find((t) => t.path === renderContentPath);
+            if (resolvedTreeItem) {
+              const fetched = await fetchBlobs(token, owner, repo, [resolvedTreeItem]);
+              entryContent = fetched[renderContentPath] || "";
+            }
+          }
         }
       }
 
@@ -126,30 +164,46 @@ export default {
         }
       }
 
-      // 8. Render
+      // 8. Render based on resolved mode
       let html;
-      if (entry && entryContent) {
-        const isJson = entry.endsWith(".json");
-        const rendered = isJson
-          ? renderer.renderJson(entry, entryContent)
-          : renderer.renderMarkdown(entry, entryContent);
-        html = rendered.html;
-      } else {
-        // Site preview — parse all posts for the index
+
+      const renderIndex = () => {
         const parsedPosts = Object.entries(posts).map(([path, content]) => {
           const { frontmatter } = renderer.parseFrontmatter(content);
           return { html: "", frontmatter, path };
         });
+        return renderer.renderCollectionIndex("index", parsedPosts, "posts");
+      };
 
-        html = renderer.renderCollectionIndex("index", parsedPosts, "posts");
-
-        if (!html) {
-          html = `<!DOCTYPE html><html><body style="font-family:system-ui;padding:2rem;color:#666;">
-            <h1>No index template</h1>
-            <p>Add <code>templates/index.html</code> to your repo to preview the site.</p>
-            <p>Found ${parsedPosts.length} posts and ${templateEntries.length} templates.</p>
-          </body></html>`;
+      if (entry && renderMode === "entry" && entryContent) {
+        const targetPath = renderContentPath || entry;
+        const isJson = targetPath.endsWith(".json");
+        const rendered = isJson
+          ? renderer.renderJson(targetPath, entryContent)
+          : renderer.renderMarkdown(targetPath, entryContent);
+        html = rendered.html;
+      } else if (entry && renderMode === "url" && renderUrl) {
+        // If a content file backs this URL, render it; otherwise fall back to index
+        if (entryContent && renderContentPath) {
+          const isJson = renderContentPath.endsWith(".json");
+          const rendered = isJson
+            ? renderer.renderJson(renderContentPath, entryContent)
+            : renderer.renderMarkdown(renderContentPath, entryContent);
+          html = rendered.html;
+        } else {
+          html = renderIndex();
         }
+      } else {
+        // Site preview or template edit — render the index
+        html = renderIndex();
+      }
+
+      if (!html) {
+        html = `<!DOCTYPE html><html><body style="font-family:system-ui;padding:2rem;color:#666;">
+          <h1>No index template</h1>
+          <p>Add <code>templates/index.html</code> to your repo to preview the site.</p>
+          <p>Found ${Object.keys(posts).length} posts and ${templateEntries.length} templates.</p>
+        </body></html>`;
       }
 
       return new Response(html, {

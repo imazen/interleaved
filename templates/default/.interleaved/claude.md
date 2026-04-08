@@ -31,6 +31,64 @@ Body text in **markdown**.
 Global data lives in `data/` as JSON files. Each file's name becomes a
 template variable: `data/site.json` → `{{site.name}}`, `{{site.nav}}`.
 
+## Content-to-URL mapping (for preview)
+
+Every content file maps to a URL on the built site. The preview system
+uses these mappings to render the correct page when editing a file.
+
+**Resolution order (first match wins):**
+
+1. **Frontmatter `url:` field** — explicit URL for this page.
+   ```yaml
+   ---
+   title: About
+   url: /about.html
+   ---
+   ```
+
+2. **Frontmatter `_preview:` field** — for files that don't have their
+   own URL (data files, partials), specifies which page to render as
+   a preview. Takes a URL or a path to a content file.
+   ```json
+   {
+     "_preview": "/",
+     "siteName": "My Blog",
+     "nav": [...]
+   }
+   ```
+
+3. **Path-based defaults:**
+   - `content/index.md` → `/`
+   - `content/about.md` → `/about.html`
+   - `content/posts/hello.md` → `/posts/hello.html`
+   - `content/posts/2026-04-01-hello.md` → `/posts/hello.html` (date stripped)
+   - `data/*.json` → `/` (index page, since data affects every page)
+   - `templates/post.html` → renders a sample post if one is configured
+
+4. **`.interleaved/mapping.json` overrides** — for files that don't
+   follow conventions. Format:
+   ```json
+   {
+     "routes": {
+       "data/navigation.json": "/",
+       "data/products/item-1.json": "/products/item-1.html"
+     },
+     "templateSamples": {
+       "templates/post.html": "content/posts/hello-world.md",
+       "templates/index.html": null
+     }
+   }
+   ```
+   - `routes`: maps a content file path to its URL. Supports `*` globs:
+     `"data/products/*.json": "/products/{name}.html"` where `{name}`
+     is the file's basename without extension.
+   - `templateSamples`: when editing a template, which content file to
+     render with it. `null` = render the site index.
+
+**When editing a template or data file**, preview always shows a real
+page (not raw JSON/HTML). The preview worker uses the mapping to pick
+the right URL.
+
 ## Templates
 
 Templates are Handlebars `.html` files in `templates/`:

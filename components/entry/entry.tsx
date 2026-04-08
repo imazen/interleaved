@@ -64,7 +64,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "sonner";
-import { EllipsisVertical, Eye, History, Lock, LockOpen, Pencil, Save } from "lucide-react";
+import { EllipsisVertical, ExternalLink, Eye, Globe, History, Lock, LockOpen, Pencil, Save } from "lucide-react";
 import useSWR, { useSWRConfig } from "swr";
 
 type LintView = {
@@ -803,8 +803,8 @@ export function Entry({
     isLoading
       ? loadingSkeleton
       : <>
-        {/* Edit / Preview toggle — compact on mobile */}
-        <div className="flex items-center gap-1 mb-4">
+        {/* Edit / Preview toggle + site preview links */}
+        <div className="flex items-center justify-between gap-2 mb-4">
           <div className="inline-flex h-8 items-center rounded-md bg-muted p-0.5 text-muted-foreground">
             <button
               type="button"
@@ -828,6 +828,38 @@ export function Entry({
               <Eye className="size-3.5" />
               <span className="hidden sm:inline">Preview</span>
             </button>
+          </div>
+
+          {/* Site preview links */}
+          <div className="flex items-center gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Link
+                  href={`/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/preview`}
+                  className={cn(
+                    "inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-sm border hover:bg-muted transition-colors",
+                  )}
+                >
+                  <Globe className="size-3.5" />
+                  <span className="hidden sm:inline">Site preview</span>
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent>Preview the full site</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <a
+                  href={`https://preview.interleaved.app/?owner=${encodeURIComponent(config.owner)}&repo=${encodeURIComponent(config.repo)}&branch=${encodeURIComponent(config.branch)}${path ? `&entry=${encodeURIComponent(path)}` : ""}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex h-8 items-center justify-center rounded-md w-8 hover:bg-muted transition-colors"
+                  aria-label="Open preview in new tab"
+                >
+                  <ExternalLink className="size-3.5" />
+                </a>
+              </TooltipTrigger>
+              <TooltipContent>Open preview in new tab</TooltipContent>
+            </Tooltip>
           </div>
         </div>
 
