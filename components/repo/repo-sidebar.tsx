@@ -243,7 +243,7 @@ function RepoSwitcher() {
             )}
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-              <Link href="/?dashboard=1">All projects</Link>
+              <Link href="/?noredirect">All projects</Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
               <Link href="/api/github-app/install">

@@ -46,10 +46,10 @@ export default async function Page() {
             buttonVariants({ variant: "outline", size: "xs" }),
             "inline-flex",
           )}
-          href="/"
+          href="/?noredirect"
         >
           <ArrowLeft />
-          Go home
+          All projects
         </Link>
         <header className="flex items-center mb-6">
           <h1 className="font-semibold tracking-tight text-lg md:text-2xl">

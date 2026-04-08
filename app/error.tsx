@@ -37,7 +37,7 @@ export default function Error({
       <EmptyContent className="flex-row justify-center gap-2">
         <Link
           className={buttonVariants({ variant: "default" })}
-          href="/?dashboard=1"
+          href="/?noredirect"
         >
           All projects
         </Link>
