@@ -14,7 +14,7 @@
     "setup:github-app": "node scripts/setup-github-app.mjs",
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "npx drizzle-kit migrate && next start",
     "lint": "eslint .",
     "db:generate": "npx drizzle-kit generate",
     "db:migrate": "npx drizzle-kit migrate",
