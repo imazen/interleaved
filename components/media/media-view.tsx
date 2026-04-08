@@ -177,7 +177,7 @@ const MediaFileTile = memo(function MediaFileTile({
       selectable && "hover:bg-muted peer-focus:ring-offset-background peer-focus:ring-2 peer-focus:ring-ring peer-focus:ring-offset-2 peer-checked:ring-offset-background peer-checked:ring-offset-2 peer-checked:ring-2 peer-checked:ring-ring",
     )}>
       {isImage
-        ? <Thumbnail name={mediaName} path={item.path} className="rounded-t-md aspect-video"/>
+        ? <Thumbnail name={mediaName} path={item.path} url={item.url ?? undefined} className="rounded-t-md aspect-video"/>
         : <div className="flex items-center justify-center rounded-md aspect-video">
             <File className="stroke-[0.5] h-24 w-24"/>
           </div>
