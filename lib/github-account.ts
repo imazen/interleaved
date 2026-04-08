@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { accountTable, userTable } from "@/db/schema";
 import { createOctokitInstance } from "@/lib/utils/octokit";
+import { refreshGithubToken } from "@/lib/github-token-refresh";
 
 // Read the linked GitHub OAuth account for a user.
 const getGithubAccount = cache(async (userId: string) => {
@@ -24,17 +25,39 @@ const getGithubId = cache(async (userId: string): Promise<number | null> => {
 
 // Refresh GitHub-derived profile fields after login without overwriting custom names.
 const syncGithubProfileOnLogin = async (userId: string) => {
-  const [user, githubAccount] = await Promise.all([
-    db.query.userTable.findFirst({
-      where: eq(userTable.id, userId),
-    }),
-    getGithubAccount(userId),
-  ]);
+  try {
+    const [user, githubAccount] = await Promise.all([
+      db.query.userTable.findFirst({
+        where: eq(userTable.id, userId),
+      }),
+      getGithubAccount(userId),
+    ]);
 
-  if (!user || !githubAccount?.accessToken) return;
+    if (!user || !githubAccount?.accessToken) return;
 
-  const octokit = createOctokitInstance(githubAccount.accessToken);
-  const { data: profile } = await octokit.rest.users.getAuthenticated();
+    // Try stored token first, refresh if it fails
+    let token = githubAccount.accessToken;
+    let octokit = createOctokitInstance(token);
+    let profile;
+
+    try {
+      const result = await octokit.rest.users.getAuthenticated();
+      profile = result.data;
+    } catch {
+      // Token expired — try refresh
+      const refreshed = await refreshGithubToken(userId);
+      if (!refreshed) return; // Can't refresh, skip sync silently
+      token = refreshed;
+      octokit = createOctokitInstance(token);
+      try {
+        const result = await octokit.rest.users.getAuthenticated();
+        profile = result.data;
+      } catch {
+        return; // Still failing, skip sync silently
+      }
+    }
+
+    if (!profile) return;
 
   const nextGithubUsername = profile.login ?? null;
   const nextImage = profile.avatar_url ?? null;
@@ -59,13 +82,17 @@ const syncGithubProfileOnLogin = async (userId: string) => {
 
   if (Object.keys(patch).length === 0) return;
 
-  await db
-    .update(userTable)
-    .set({
-      ...patch,
-      updatedAt: new Date(),
-    })
-    .where(eq(userTable.id, userId));
+    await db
+      .update(userTable)
+      .set({
+        ...patch,
+        updatedAt: new Date(),
+      })
+      .where(eq(userTable.id, userId));
+  } catch (error) {
+    // Never let profile sync crash the login flow
+    console.error("[auth] github profile sync failed", { userId, error: (error as Error).message });
+  }
 };
 
 export { getGithubAccount, getGithubId, syncGithubProfileOnLogin };
