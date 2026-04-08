@@ -1,0 +1,47 @@
+name: Build & Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Install the Interleaved renderer (handlebars + marked)
+      - run: npm install --no-save handlebars marked yaml tsx
+
+      # Build the site
+      - name: Build
+        run: npx tsx node_modules/interleaved/scripts/build-site.ts --src . --out ./_site
+        # If you cloned the interleaved repo locally, adjust the path:
+        # run: npx tsx /path/to/interleaved/scripts/build-site.ts --src . --out ./_site
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./_site
+
+  # Deploy to GitHub Pages (optional — remove if using Netlify/Vercel/CF Pages)
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
