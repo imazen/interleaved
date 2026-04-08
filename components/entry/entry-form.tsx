@@ -1051,7 +1051,8 @@ const EntryForm = ({
   }, [fields, contentObject]);
 
   const form = useForm({
-    resolver: zodSchema && zodResolver(zodSchema),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    resolver: zodSchema ? zodResolver(zodSchema as any) : undefined,
     defaultValues,
     reValidateMode: "onSubmit",
   });

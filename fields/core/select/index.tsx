@@ -15,7 +15,7 @@ const schema = (field: Field) => {
 
   const optionSchema = z.string().refine(
     (value) => normalizedValues.includes(value),
-    { message: normalizedValues.length === 0 ? "This select field requires options.values" : "Invalid option" }
+    { error: normalizedValues.length === 0 ? "This select field requires options.values" : "Invalid option" }
   );
 
   if (field.options?.multiple) {

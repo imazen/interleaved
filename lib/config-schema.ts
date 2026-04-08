@@ -11,39 +11,42 @@ const ActionSchema = z
   .object({
     name: z
       .string({
-        required_error: "'name' is required.",
-        invalid_type_error: "'name' must be a string.",
+        error: (issue) => issue.input === undefined
+          ? "'name' is required."
+          : "'name' must be a string.",
       })
       .regex(/^[a-zA-Z0-9-_]+$/, {
-        message: "'name' must be alphanumeric with dashes and underscores.",
+        error: "'name' must be alphanumeric with dashes and underscores.",
       }),
     label: z.string({
-      required_error: "'label' is required.",
-      invalid_type_error: "'label' must be a string.",
+      error: (issue) => issue.input === undefined
+        ? "'label' is required."
+        : "'label' must be a string.",
     }),
     workflow: z.string({
-      required_error: "'workflow' is required.",
-      invalid_type_error: "'workflow' must be a string.",
+      error: (issue) => issue.input === undefined
+        ? "'workflow' is required."
+        : "'workflow' must be a string.",
     }),
     ref: z
       .string({
-        message: "'ref' must be a string.",
+        error: "'ref' must be a string.",
       })
       .optional(),
     cancelable: z
       .boolean({
-        message: "'cancelable' must be a boolean.",
+        error: "'cancelable' must be a boolean.",
       })
       .optional(),
     scope: z
       .enum(["collection", "entry"], {
-        message: "'scope' must be either 'collection' or 'entry'.",
+        error: "'scope' must be either 'collection' or 'entry'.",
       })
       .optional(),
     confirm: z
       .union([
         z.boolean({
-          message: "'confirm' must be a boolean or an object.",
+          error: "'confirm' must be a boolean or an object.",
         }),
         z.object({
           title: z.string().optional(),
@@ -56,18 +59,20 @@ const ActionSchema = z
       .array(z.object({
         name: z
           .string({
-            required_error: "'fields[].name' is required.",
-            invalid_type_error: "'fields[].name' must be a string.",
+            error: (issue) => issue.input === undefined
+              ? "'fields[].name' is required."
+              : "'fields[].name' must be a string.",
           })
           .regex(/^[a-zA-Z0-9-_]+$/, {
-            message: "'fields[].name' must be alphanumeric with dashes and underscores.",
+            error: "'fields[].name' must be alphanumeric with dashes and underscores.",
           }),
         label: z.string({
-          required_error: "'fields[].label' is required.",
-          invalid_type_error: "'fields[].label' must be a string.",
+          error: (issue) => issue.input === undefined
+            ? "'fields[].label' is required."
+            : "'fields[].label' must be a string.",
         }),
         type: z.enum(["text", "textarea", "select", "checkbox", "number"], {
-          message: "'fields[].type' must be 'text', 'textarea', 'select', 'checkbox', or 'number'.",
+          error: "'fields[].type' must be 'text', 'textarea', 'select', 'checkbox', or 'number'.",
         }),
         required: z.boolean().optional(),
         default: z.union([z.string(), z.number(), z.boolean()]).optional(),
@@ -91,7 +96,7 @@ const ActionSchema = z
           });
         }
       }), {
-        message: "'fields' must be an array of action field definitions.",
+        error: "'fields' must be an array of action field definitions.",
       })
       .optional(),
   })
@@ -101,29 +106,29 @@ const CommitTemplatesSchema = z
   .object({
     create: z
       .string({
-        message: "'create' must be a string.",
+        error: "'create' must be a string.",
       })
       .optional(),
     update: z
       .string({
-        message: "'update' must be a string.",
+        error: "'update' must be a string.",
       })
       .optional(),
     delete: z
       .string({
-        message: "'delete' must be a string.",
+        error: "'delete' must be a string.",
       })
       .optional(),
     rename: z
       .string({
-        message: "'rename' must be a string.",
+        error: "'rename' must be a string.",
       })
       .optional(),
   })
   .strict();
 
 const CommitIdentitySchema = z.enum(["app", "user"], {
-  message: "'identity' must be either 'app' or 'user'.",
+  error: "'identity' must be either 'app' or 'user'.",
 });
 
 // Media configuration object schema (for single object)
@@ -131,33 +136,33 @@ const MediaConfigObject = z
   .object({
     input: z
       .string({
-        message: "'input' is required.",
+        error: "'input' is required.",
       })
       .regex(/^[^/].*[^/]$|^$/, {
-        message:
+        error:
           "'input' must be a valid relative path (no leading or trailing slash).",
       }),
     output: z
       .string({
-        message: "'output' is required.",
+        error: "'output' is required.",
       })
       .regex(/^(\/?[^/].*[^/]$|^\/?$)/, {
-        message: "'output' must be a valid path with no trailing slash.",
+        error: "'output' must be a valid path with no trailing slash.",
       }),
     path: z
       .string()
       .regex(/^[^/].*[^/]$|^$/, {
-        message:
+        error:
           "'path' must be a valid relative path (no leading or trailing slash).",
       })
       .optional(),
     extensions: z
       .array(
         z.string({
-          message: "Entries in the 'extensions' array must be strings.",
+          error: "Entries in the 'extensions' array must be strings.",
         }),
         {
-          message: "'extensions' must be an array of strings.",
+          error: "'extensions' must be an array of strings.",
         },
       )
       .optional(),
@@ -175,22 +180,22 @@ const MediaConfigObject = z
             "spreadsheet",
           ],
           {
-            message:
+            error:
               "Entries in the 'categories' array must be 'image', 'document', 'video', 'audio', 'compressed', 'code', 'font', or 'spreadsheet'.",
           },
         ),
         {
-          message: "'categories' must be an array of strings.",
+          error: "'categories' must be an array of strings.",
         },
       )
       .optional(),
     rename: z
       .union([
         z.boolean({
-          message: "'rename' must be a boolean, 'safe', or 'random'.",
+          error: "'rename' must be a boolean, 'safe', or 'random'.",
         }),
         z.enum(["safe", "random"], {
-          message: "'rename' must be a boolean, 'safe', or 'random'.",
+          error: "'rename' must be a boolean, 'safe', or 'random'.",
         }),
       ])
       .optional(),
@@ -201,7 +206,7 @@ const MediaConfigObject = z
           identity: CommitIdentitySchema.optional(),
         },
         {
-          message: "'commit' must be an object.",
+          error: "'commit' must be an object.",
         },
       )
       .optional(),
@@ -209,7 +214,7 @@ const MediaConfigObject = z
     label: z.string().optional(),
     actions: z
       .array(ActionSchema, {
-        message: "'actions' must be an array of action definitions.",
+        error: "'actions' must be an array of action definitions.",
       })
       .optional(),
   })
@@ -218,21 +223,21 @@ const MediaConfigObject = z
 // Named media configuration schema (for array entries)
 const NamedMediaConfig = MediaConfigObject.extend({
   name: z.string({
-    required_error:
-      "'name' is required for media configurations in array format.",
-    invalid_type_error: "'name' must be a string.",
+    error: (issue) => issue.input === undefined
+      ? "'name' is required for media configurations in array format."
+      : "'name' must be a string.",
   }),
 });
 
 // Media schema
 const MediaSchema = z.union([
   z.string().regex(/^[^/].*[^/]$|^$/, {
-    message:
+    error:
       "'media' must be a valid relative path (no leading or trailing slash).",
   }),
   MediaConfigObject,
   z.array(NamedMediaConfig, {
-    message:
+    error:
       "'media' must be a string, an object, or an array of named media configurations.",
   }),
 ]);
@@ -259,14 +264,14 @@ const ListSchema = z.union([
               summary: z.string().optional(),
             },
             {
-              message:
+              error:
                 "'collapsible' must be either a boolean or an object with 'collapsed' and 'summary' properties.",
             },
           ),
         ]),
       },
       {
-        message:
+        error:
           "'list' must be either a boolean or an object with 'min' and 'max' properties.",
       },
     )
@@ -275,28 +280,29 @@ const ListSchema = z.union([
 
 const FilenameConfigSchema = z.union([
   z.string({
-    message: "'filename' must be a string or an object.",
+    error: "'filename' must be a string or an object.",
   }),
   z
     .object(
       {
         template: z.string({
-          required_error: "'template' is required.",
-          invalid_type_error: "'template' must be a string.",
+          error: (issue) => issue.input === undefined
+            ? "'template' is required."
+            : "'template' must be a string.",
         }),
         field: z
           .union([
             z.boolean({
-              message: "'field' must be a boolean or 'create'.",
+              error: "'field' must be a boolean or 'create'.",
             }),
             z.enum(["create"], {
-              message: "'field' must be a boolean or 'create'.",
+              error: "'field' must be a boolean or 'create'.",
             }),
           ])
           .optional(),
       },
       {
-        message:
+        error:
           "'filename' object must contain 'template' and optionally 'field'.",
       },
     )
@@ -313,17 +319,17 @@ const generateFieldObjectSchema = (
       .union([
         z.literal(false),
         z.string({
-          message: "'label' must be a string or 'false'.",
+          error: "'label' must be a string or 'false'.",
         }),
       ])
       .optional(),
     description: z.string().optional().nullable(),
     component: z
       .string({
-        invalid_type_error: "'component' must be a string.",
+        error: "'component' must be a string.",
       })
       .regex(/^[a-zA-Z0-9-_]+$/, {
-        message:
+        error:
           "Component key must be alphanumeric with dashes and underscores.",
       })
       .optional(),
@@ -331,7 +337,7 @@ const generateFieldObjectSchema = (
     fields: z
       .array(
         z.lazy(() => generateFieldObjectSchema()),
-        { message: "'fields' must be an array of field definitions." },
+        { error: "'fields' must be an array of field definitions." },
       )
       .optional(),
   };
@@ -341,11 +347,12 @@ const generateFieldObjectSchema = (
       ...{
         name: z
           .string({
-            required_error: "'name' is required.",
-            invalid_type_error: "'name' must be a string.",
+            error: (issue) => issue.input === undefined
+              ? "'name' is required."
+              : "'name' must be a string.",
           })
           .regex(/^[a-zA-Z0-9-_]+$/, {
-            message: "'name' must be alphanumeric with dashes and underscores.",
+            error: "'name' must be alphanumeric with dashes and underscores.",
           }),
       },
       ...baseObjectSchema,
@@ -357,13 +364,13 @@ const generateFieldObjectSchema = (
       ...{
         type: z
           .string({
-            invalid_type_error: "'type' must be a string.",
+            error: "'type' must be a string.",
           })
-          .min(1, { message: "'type' cannot be empty." })
+          .min(1, { error: "'type' cannot be empty." })
           .refine(
             (val) => fieldTypes.has(val) || ["object", "block"].includes(val),
             {
-              message: "'type' must be a valid field type.",
+              error: "'type' must be a valid field type.",
               path: ["type"],
             },
           )
@@ -371,42 +378,43 @@ const generateFieldObjectSchema = (
         list: ListSchema.optional(),
         hidden: z
           .boolean({
-            message: "'hidden' must be a boolean.",
+            error: "'hidden' must be a boolean.",
           })
           .optional()
           .nullable(),
         readonly: z
           .boolean({
-            message: "'readonly' must be a boolean.",
+            error: "'readonly' must be a boolean.",
           })
           .optional()
           .nullable(),
         required: z
           .boolean({
-            message: "'required' must be a boolean.",
+            error: "'required' must be a boolean.",
           })
           .optional()
           .nullable(),
         pattern: z
           .union([
             z.string({
-              message: "'pattern' must be a valid regex string.",
+              error: "'pattern' must be a valid regex string.",
             }),
             z
               .object(
                 {
                   regex: z.string({
-                    required_error: "'regex' is required.",
-                    invalid_type_error: "'regex' must be a valid regex string.",
+                    error: (issue) => issue.input === undefined
+                      ? "'regex' is required."
+                      : "'regex' must be a valid regex string.",
                   }),
                   message: z
                     .string({
-                      message: "'message' must be a string.",
+                      error: "'message' must be a string.",
                     })
                     .optional(),
                 },
                 {
-                  message:
+                  error:
                     "'pattern' must be a string (regex) or an object with 'regex' and optionally 'message' properties.",
                 },
               )
@@ -417,15 +425,15 @@ const generateFieldObjectSchema = (
         blocks: z
           .array(
             z.lazy(() => generateFieldObjectSchema(false, true)),
-            { message: "'blocks' must be an array of field definitions." },
+            { error: "'blocks' must be an array of field definitions." },
           )
           .optional(),
         blockKey: z
           .string({
-            message: "'blockKey' must be a string.",
+            error: "'blockKey' must be a string.",
           })
           .min(1, {
-            message: "'blockKey' cannot be empty.",
+            error: "'blockKey' cannot be empty.",
           })
           .optional(),
       },
@@ -496,35 +504,38 @@ const ContentLeafSchema = z
   .object({
     name: z
       .string({
-        required_error: "'name' is required.",
-        invalid_type_error: "'name' must be a string.",
+        error: (issue) => issue.input === undefined
+          ? "'name' is required."
+          : "'name' must be a string.",
       })
       .regex(/^[a-zA-Z0-9-_]+$/, {
-        message: "'name' must be alphanumeric with dashes and underscores.",
+        error: "'name' must be alphanumeric with dashes and underscores.",
       }),
     label: z.string().optional(),
     description: z.string().optional().nullable(),
     type: z.enum(["collection", "file"], {
-      required_error: "'type' is required.",
-      message: "'type' must be either 'collection' or 'file'.",
+      error: (issue) => issue.input === undefined
+        ? "'type' is required."
+        : "'type' must be either 'collection' or 'file'.",
     }),
     path: z
       .string({
-        required_error: "'path' is required.",
-        invalid_type_error: "'path' must be a string.",
+        error: (issue) => issue.input === undefined
+          ? "'path' is required."
+          : "'path' must be a string.",
       })
       .regex(/^[^/].*[^/]$|^$/, {
-        message:
+        error:
           "'path' must be a valid relative path (no leading or trailing slash).",
       }),
     filename: FilenameConfigSchema.optional().nullable(),
     exclude: z
       .array(
         z.string({
-          message: "Entries in the 'exclude' array must be strings.",
+          error: "Entries in the 'exclude' array must be strings.",
         }),
         {
-          message: "'exclude' must be an array of strings.",
+          error: "'exclude' must be an array of strings.",
         },
       )
       .optional(),
@@ -533,7 +544,7 @@ const ContentLeafSchema = z
         {
           layout: z
             .enum(["tree", "list"], {
-              message: "'layout' must be either 'tree' or 'list'.",
+              error: "'layout' must be either 'tree' or 'list'.",
             })
             .optional(),
           node: z
@@ -542,28 +553,29 @@ const ContentLeafSchema = z
                 z.object(
                   {
                     filename: z.string({
-                      required_error: "'filename' is required.",
-                      invalid_type_error: "'filename' must be a string.",
+                      error: (issue) => issue.input === undefined
+                        ? "'filename' is required."
+                        : "'filename' must be a string.",
                     }),
                     hideDirs: z
                       .enum(["all", "nodes", "others"], {
-                        message:
+                        error:
                           "'hideDirs' must be one of 'nodes', 'others', or 'all'.",
                       })
                       .optional(),
                   },
                   {
-                    message:
+                    error:
                       "'node' must contain 'filename' and optionally 'hideDirs'.",
                   },
                 ),
                 z.string({
-                  message:
+                  error:
                     "'node' must be a string or an object with 'filename' and optionally 'hideDirs' attributes.",
                 }),
               ],
               {
-                message:
+                error:
                   "'node' must be a string or an object with 'filename' and 'hideDirs'.",
               },
             )
@@ -571,36 +583,36 @@ const ContentLeafSchema = z
           fields: z
             .array(
               z.string({
-                message: "Entries in the 'fields' array must be strings.",
+                error: "Entries in the 'fields' array must be strings.",
               }),
               {
-                message: "'fields' must be an array of strings.",
+                error: "'fields' must be an array of strings.",
               },
             )
             .optional(),
           primary: z
             .string({
-              message: "'primary' must be a string.",
+              error: "'primary' must be a string.",
             })
             .optional()
             .nullable(),
           sort: z
             .array(
               z.string({
-                message: "Entries in the 'sort' array must be strings.",
+                error: "Entries in the 'sort' array must be strings.",
               }),
               {
-                message: "'sort' must be an array of strings.",
+                error: "'sort' must be an array of strings.",
               },
             )
             .optional(),
           search: z
             .array(
               z.string({
-                message: "Entries in the 'search' array must be strings.",
+                error: "Entries in the 'search' array must be strings.",
               }),
               {
-                message: "'search' must be an array of strings.",
+                error: "'search' must be an array of strings.",
               },
             )
             .optional(),
@@ -609,25 +621,25 @@ const ContentLeafSchema = z
               {
                 search: z
                   .string({
-                    message: "'search' must be a string.",
+                    error: "'search' must be a string.",
                   })
                   .optional()
                   .nullable(),
                 sort: z
                   .string({
-                    message: "'sort' must be a string.",
+                    error: "'sort' must be a string.",
                   })
                   .optional()
                   .nullable(),
                 order: z
                   .enum(["asc", "desc"], {
-                    message: "'order' must be either 'asc' or 'desc'.",
+                    error: "'order' must be either 'asc' or 'desc'.",
                   })
                   .optional()
                   .nullable(),
               },
               {
-                message:
+                error:
                   "'default' must be an object with 'search', 'sort' and 'order' attributes.",
               },
             )
@@ -636,7 +648,7 @@ const ContentLeafSchema = z
             .nullable(),
         },
         {
-          message:
+          error:
             "'view' must be an object with 'fields', 'primary', 'sort', 'search' and 'default' attributes.",
         },
       )
@@ -657,7 +669,7 @@ const ContentLeafSchema = z
           "raw",
         ],
         {
-          message:
+          error:
             "'format' must be 'yaml-frontmatter', 'json-frontmatter', 'tom-frontmatter', 'yaml', 'json', 'toml', 'datagrid', 'code' or 'raw'.",
         },
       )
@@ -668,24 +680,24 @@ const ContentLeafSchema = z
         z
           .array(
             z.string({
-              message: "Delimiters must be strings",
+              error: "Delimiters must be strings",
             }),
           )
           .length(2, "'delimiters' must contain exactly two string values."),
         z.string({
-          message: "'delimiters' must be a string or array of 2 strings.",
+          error: "'delimiters' must be a string or array of 2 strings.",
         }),
       ])
       .optional(),
     subfolders: z
       .boolean({
-        message: "'subfolders' must be a boolean.",
+        error: "'subfolders' must be a boolean.",
       })
       .optional()
       .nullable(),
     fields: z
       .array(generateFieldObjectSchema(), {
-        message: "'fields' must be an array of field definitions.",
+        error: "'fields' must be an array of field definitions.",
       })
       .optional(),
     list: ListSchema.optional(),
@@ -696,13 +708,13 @@ const ContentLeafSchema = z
           identity: CommitIdentitySchema.optional(),
         },
         {
-          message: "'commit' must be an object.",
+          error: "'commit' must be an object.",
         },
       )
       .optional(),
     actions: z
       .array(ActionSchema, {
-        message: "'actions' must be an array of action definitions.",
+        error: "'actions' must be an array of action definitions.",
       })
       .optional(),
   })
@@ -713,19 +725,20 @@ const ContentGroupSchema: z.ZodType<any> = z.lazy(() =>
     .object({
       name: z
         .string({
-          required_error: "'name' is required.",
-          invalid_type_error: "'name' must be a string.",
+          error: (issue) => issue.input === undefined
+            ? "'name' is required."
+            : "'name' must be a string.",
         })
         .regex(/^[a-zA-Z0-9-_]+$/, {
-          message: "'name' must be alphanumeric with dashes and underscores.",
+          error: "'name' must be alphanumeric with dashes and underscores.",
         }),
       label: z.string().optional(),
       description: z.string().optional().nullable(),
       type: z.literal("group", {
-        invalid_type_error: "'type' must be 'group'.",
+        error: "'type' must be 'group'.",
       }),
       items: z.array(ContentObjectSchema, {
-        message: "'items' must be an array of content entries.",
+        error: "'items' must be an array of content entries.",
       }),
     })
     .strict(),
@@ -740,25 +753,25 @@ const ConfigSchema = z
   .object({
     cache: z
       .boolean({
-        message: "'cache' must be a boolean.",
+        error: "'cache' must be a boolean.",
       })
       .optional(),
     hide: z
       .boolean({
-        message: "'hide' must be a boolean.",
+        error: "'hide' must be a boolean.",
       })
       .optional(),
     media: MediaSchema.optional(),
     content: z
       .array(ContentObjectSchema, {
-        message:
+        error:
           "'content' must be an array of objects with at least one entry.",
       })
       .optional(),
     components: z
       .record(
         z.string().regex(/^[a-zA-Z0-9-_]+$/, {
-          message:
+          error:
             "Component key must be alphanumeric with dashes and underscores.",
         }),
         generateFieldObjectSchema(true),
@@ -766,7 +779,7 @@ const ConfigSchema = z
       .optional(),
     actions: z
       .array(ActionSchema, {
-        message: "'actions' must be an array of action definitions.",
+        error: "'actions' must be an array of action definitions.",
       })
       .optional(),
     settings: z
@@ -776,17 +789,17 @@ const ConfigSchema = z
             {
               config: z
                 .boolean({
-                  message: "'config' must be a boolean.",
+                  error: "'config' must be a boolean.",
                 })
                 .optional(),
               cache: z
                 .boolean({
-                  message: "'cache' must be a boolean.",
+                  error: "'cache' must be a boolean.",
                 })
                 .optional(),
               hide: z
                 .boolean({
-                  message: "'hide' must be a boolean.",
+                  error: "'hide' must be a boolean.",
                 })
                 .optional(),
               content: z
@@ -794,12 +807,12 @@ const ConfigSchema = z
                   {
                     merge: z
                       .boolean({
-                        message: "'merge' must be a boolean.",
+                        error: "'merge' must be a boolean.",
                       })
                       .optional(),
                   },
                   {
-                    message: "'content' must be an object.",
+                    error: "'content' must be an object.",
                   },
                 )
                 .optional(),
@@ -810,19 +823,19 @@ const ConfigSchema = z
                     identity: CommitIdentitySchema.optional(),
                   },
                   {
-                    message: "'commit' must be an object.",
+                    error: "'commit' must be an object.",
                   },
                 )
                 .optional(),
             },
             {
-              message: "'settings' must be an object.",
+              error: "'settings' must be an object.",
             },
           )
           .strict()
           .optional(),
         z.boolean({
-          message: "'settings' must be a boolean or an object.",
+          error: "'settings' must be a boolean or an object.",
         }),
       ])
       .optional(),

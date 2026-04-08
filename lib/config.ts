@@ -461,7 +461,7 @@ const validateConfig = (document: YAML.Document.Parsed) => {
     ConfigSchema.parse(content);
   } catch (zodError: any) {
     if (zodError instanceof z.ZodError) {
-      zodError.errors.forEach((error) => {
+      zodError.issues.forEach((error) => {
         processZodError(error, document, errors);
       });
     }

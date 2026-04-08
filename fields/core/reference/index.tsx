@@ -20,7 +20,7 @@ const schema = (field: Field) => {
 
   if (field.options?.multiple) {
     let zodSchema = z.array(singleValueSchema.refine((value) => value.length > 0, {
-      message: "Invalid reference",
+      error: "Invalid reference",
     }));
     if (field.required) zodSchema = zodSchema.min(1, "This field is required");
     if (min !== undefined) zodSchema = zodSchema.min(min, `Select at least ${min} reference${min === 1 ? "" : "s"}`);
@@ -38,7 +38,7 @@ const schema = (field: Field) => {
   return z.preprocess(
     (val) => (val === null || val === undefined ? "" : val),
     field.required
-      ? singleValueSchema.refine((value) => value.length > 0, { message: "This field is required" })
+      ? singleValueSchema.refine((value) => value.length > 0, { error: "This field is required" })
       : z.union([z.literal(""), singleValueSchema]).optional()
   );
 };

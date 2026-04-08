@@ -97,7 +97,7 @@ export async function POST(
             const zodValidation = zodSchema.safeParse(contentObject);
             
             if (zodValidation.success === false ) {
-              const errorMessages = zodValidation.error.errors.map((error: any) => {
+              const errorMessages = zodValidation.error.issues.map((error: any) => {
                 let message = error.message;
                 if (error.path.length > 0) message = `${message} at ${error.path.join(".")}`;
                 return message;
@@ -106,7 +106,7 @@ export async function POST(
             }
 
             const validatedContentObject = deepMap(
-              zodValidation.data,
+              zodValidation.data as Record<string, any>,
               contentFields,
               (value, field) => {
                 const fieldType = field.type as string;

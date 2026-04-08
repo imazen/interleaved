@@ -45,3 +45,4 @@ public/logo*
 
 # Database
 local.db
+test-results/

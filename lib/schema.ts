@@ -215,7 +215,7 @@ const generateZodSchema = (
           }
         }
         if (field.required) {
-          arraySchema = arraySchema.min(1, { message: `Field requires at least one item.` });
+          arraySchema = arraySchema.min(1, { error: `Field requires at least one item.` });
           fieldSchema = arraySchema;
         } else {
           fieldSchema = arraySchema.optional();
@@ -229,7 +229,7 @@ const generateZodSchema = (
           if (field.type === 'block') {
             fieldSchema = fieldSchema.refine(
               (val) => val != null && typeof val === 'object' && Object.keys(val).length > 0,
-              { message: "Please select a block." }
+              { error: "Please select a block." }
             );
           }
         }
