@@ -360,14 +360,24 @@ export default {
         </body></html>`;
       }
 
+      // Inject <base> tag so absolute paths (/assets/x.jpg) resolve
+      // within the repo prefix (/owner/repo/branch/assets/x.jpg).
+      // Also handles CSS url('/assets/...') and JS fetch('/content/...').
+      const baseHref = `/${owner}/${repo}/${encodeURIComponent(branch)}/`;
+      const baseTag = `<base href="${baseHref}">`;
+      if (html.includes("<head>")) {
+        html = html.replace("<head>", `<head>${baseTag}`);
+      } else if (html.includes("<html>")) {
+        html = html.replace("<html>", `<html><head>${baseTag}</head>`);
+      } else {
+        html = `<!DOCTYPE html><html><head>${baseTag}</head><body>${html}</body></html>`;
+      }
+
       return new Response(html, {
         headers: {
           "Content-Type": "text/html; charset=utf-8",
           "Content-Security-Policy": CSP,
           "X-Content-Type-Options": "nosniff",
-          // No X-Frame-Options — CSP frame-ancestors handles iframe policy.
-          // Setting both makes browsers enforce the stricter one (SAMEORIGIN),
-          // which blocks legit framing from interleaved.app.
           "Referrer-Policy": "no-referrer",
           "Cache-Control": "private, max-age=0, must-revalidate",
           "X-Preview-SHA": sha.slice(0, 8),
