@@ -27,27 +27,97 @@ const ALLOWED_PARENTS = [
   "https://interleaved-production.up.railway.app",
 ];
 
-// Strict CSP for preview HTML — the user's content renders with no JS,
-// no network access beyond the media CDN, and no form submissions.
+// Preview CSP: permissive enough to render the site as it actually looks
+// (inline scripts, CDN resources, fonts, images). Cross-origin iframe
+// isolation from the admin is the primary security boundary, not CSP.
+// We still restrict form-action and frame-ancestors.
 const CSP = [
-  "default-src 'none'",
+  "default-src 'self' https: data: blob:",
+  "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.tailwindcss.com https://unpkg.com",
   "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com https://unpkg.com https://cdn.tailwindcss.com",
   "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net data:",
-  "img-src 'self' https://media.interleaved.app https://raw.githubusercontent.com data:",
-  "script-src 'none'",
+  "img-src 'self' https://media.interleaved.app https://raw.githubusercontent.com data: blob:",
   "form-action 'none'",
   "frame-ancestors 'self' https://interleaved.app https://admin.interleaved.app https://interleaved-production.up.railway.app",
-  "base-uri 'none'",
-  "connect-src 'none'",
 ].join("; ");
+
+// MIME types for serving static assets from git
+const MIME_TYPES = {
+  html: "text/html", htm: "text/html",
+  css: "text/css", js: "application/javascript", mjs: "application/javascript",
+  json: "application/json",
+  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
+  gif: "image/gif", webp: "image/webp", avif: "image/avif",
+  svg: "image/svg+xml", ico: "image/x-icon",
+  woff: "font/woff", woff2: "font/woff2", ttf: "font/ttf", otf: "font/otf",
+  txt: "text/plain", xml: "application/xml",
+  mp4: "video/mp4", webm: "video/webm",
+  pdf: "application/pdf",
+};
+
+function getMimeType(path) {
+  const ext = (path.split(".").pop() || "").toLowerCase();
+  return MIME_TYPES[ext] || "application/octet-stream";
+}
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    const owner = url.searchParams.get("owner");
-    const repo = url.searchParams.get("repo");
-    const branch = url.searchParams.get("branch") || "main";
+    let owner = url.searchParams.get("owner");
+    let repo = url.searchParams.get("repo");
+    let branch = url.searchParams.get("branch") || "main";
     const entry = url.searchParams.get("entry");
+
+    // Asset request: no owner/repo params, but has a non-root path.
+    // Parse the Referer to get the repo context from the original preview URL.
+    const assetPath = url.pathname.replace(/^\/+/, "");
+    if ((!owner || !repo) && assetPath && assetPath !== "index.html") {
+      const referer = request.headers.get("Referer");
+      if (referer) {
+        try {
+          const ref = new URL(referer);
+          owner = ref.searchParams.get("owner");
+          repo = ref.searchParams.get("repo");
+          branch = ref.searchParams.get("branch") || branch;
+        } catch {
+          // Invalid referer, fall through
+        }
+      }
+
+      if (owner && repo) {
+        // Serve this asset from the git repo
+        try {
+          const token = await getRepoToken(env.GITHUB_APP_ID, env.GITHUB_APP_PRIVATE_KEY, owner, repo);
+          const response = await fetch(
+            `https://raw.githubusercontent.com/${owner}/${repo}/${encodeURIComponent(branch)}/${assetPath}`,
+            {
+              headers: {
+                Authorization: `token ${token}`,
+                "User-Agent": "interleaved-preview-worker",
+              },
+              cf: { cacheTtl: 300, cacheEverything: true },
+            },
+          );
+
+          if (response.ok) {
+            const body = await response.arrayBuffer();
+            return new Response(body, {
+              headers: {
+                "Content-Type": getMimeType(assetPath),
+                "Cache-Control": "public, max-age=300",
+                "Access-Control-Allow-Origin": "*",
+              },
+            });
+          }
+        } catch {
+          // Fall through to 400
+        }
+
+        return new Response("Asset not found", { status: 404 });
+      }
+
+      return new Response("owner and repo are required", { status: 400 });
+    }
 
     if (!owner || !repo) {
       return new Response("owner and repo are required", { status: 400 });
