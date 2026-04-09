@@ -111,7 +111,7 @@ export default function SitePreviewPage() {
               ref={iframeRef}
               title="Site preview"
               src={iframeSrc}
-              sandbox="allow-same-origin"
+              sandbox="allow-same-origin allow-scripts"
               referrerPolicy="no-referrer"
               onLoad={() => setLoaded(true)}
               className={cn(

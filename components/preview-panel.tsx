@@ -149,7 +149,7 @@ export function PreviewPanel({
             ref={iframeRef}
             title="Preview"
             src={iframeSrc}
-            sandbox="allow-same-origin"
+            sandbox="allow-same-origin allow-scripts"
             referrerPolicy="no-referrer"
             onLoad={() => setIframeLoaded(true)}
             className={cn(
