@@ -57,12 +57,11 @@ const getRawUrl = async (
   const normalizedInputPath = normalizeImagePathInput(decodedPath);
   if (!normalizedInputPath) return null;
   
-  // Always consult the API. When external storage (R2/S3) is configured,
-  // public files don't live in git either. The media API handles both git
-  // and external routing. We still accept the isPrivate arg for API compat
-  // but treat every case the same way.
-  void isPrivate;
-  {
+  // For private repos or when we need authenticated access, go through
+  // the media API which handles both git and external storage.
+  // For public repos with git-hosted media, use raw.githubusercontent.com
+  // directly — it's faster and doesn't consume API quota.
+  if (isPrivate) {
     const filename = canonicalizeFileName(normalizedInputPath);
     if (!filename) return null;
     const parentPath = getParentPath(normalizedInputPath);
@@ -123,6 +122,9 @@ const getRawUrl = async (
     }
 
     return cache[parentFullPath]?.files?.[filename];
+  } else {
+    // Public repo: use raw.githubusercontent.com directly (fast, no API quota)
+    return `https://raw.githubusercontent.com/${owner}/${repo}/${encodeURIComponent(branch)}/${encodeURI(normalizedInputPath)}`;
   }
 };
 

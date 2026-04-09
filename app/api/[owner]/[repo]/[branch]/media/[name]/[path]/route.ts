@@ -38,20 +38,28 @@ export async function GET(
 
     const { searchParams } = new URL(request.url);
     const nocache = searchParams.get('nocache');
-    // Allow client to override storage source: ?source=git or ?source=external
+    // Allow client to override: ?source=git or ?source=external
     const sourceOverride = searchParams.get("source");
-    const useExternal = sourceOverride === "external"
-      || (sourceOverride !== "git" && isExternalStorageConfigured());
 
-    let results;
+    let results: any[] = [];
 
-    // Use external storage when configured (default for media)
-    if (useExternal) {
+    // Helper: list from git
+    const listFromGit = async () => {
+      try {
+        return await getMediaCache(params.owner, params.repo, params.branch, normalizedPath, token, !!nocache);
+      } catch (error: any) {
+        if (error?.status === 404) return [];
+        throw error;
+      }
+    };
+
+    // Helper: list from external (R2/S3)
+    const listFromExternal = async () => {
       try {
         const repoId = await getRepoId(token, params.owner, params.repo);
         const provider = createMediaProvider(repoId);
         const files = await provider.listFiles(normalizedPath);
-        results = files.map((f) => ({
+        return files.map((f) => ({
           type: f.type,
           sha: f.sha,
           name: f.name,
@@ -60,22 +68,29 @@ export async function GET(
           downloadUrl: f.url,
         }));
       } catch (error: any) {
-        if (error?.name === "NoSuchKey" || error?.$metadata?.httpStatusCode === 404) {
-          results = [];
-        } else {
-          throw error;
-        }
+        if (error?.name === "NoSuchKey" || error?.$metadata?.httpStatusCode === 404) return [];
+        throw error;
       }
+    };
+
+    if (sourceOverride === "git") {
+      results = await listFromGit();
+    } else if (sourceOverride === "external") {
+      results = await listFromExternal();
+    } else if (isExternalStorageConfigured()) {
+      // No explicit source — try both, merge results. This handles repos
+      // that have media in git AND in R2 (common during migration).
+      const [gitResults, externalResults] = await Promise.all([
+        listFromGit(),
+        listFromExternal(),
+      ]);
+      // Merge: external files override git files with the same name
+      const merged = new Map<string, any>();
+      for (const item of gitResults) merged.set(item.name || item.path, item);
+      for (const item of externalResults) merged.set(item.name || item.path, item);
+      results = Array.from(merged.values());
     } else {
-      try {
-        results = await getMediaCache(params.owner, params.repo, params.branch, normalizedPath, token, !!nocache);
-      } catch (error: any) {
-        if (error?.status === 404) {
-          results = [];
-        } else {
-          throw error;
-        }
-      }
+      results = await listFromGit();
     }
 
     if (mediaConfig.extensions && mediaConfig.extensions.length > 0) {

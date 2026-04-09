@@ -317,9 +317,12 @@ const MediaView = ({
     });
   }, []);
   
-  // Source toggle: "external" (R2/S3 — default when configured) or "git"
-  const [mediaSource, setMediaSource] = useState<"external" | "git">("external");
+  // Source toggle: "external" (R2/S3) or "git". Default to git since most
+  // existing repos have media in git. Switch to external when user clicks
+  // the Cloud tab, or when the initial git listing is empty and external has files.
+  const [mediaSource, setMediaSource] = useState<"external" | "git">("git");
   const [externalAvailable, setExternalAvailable] = useState(false);
+  const [autoSwitched, setAutoSwitched] = useState(false);
 
   useEffect(() => {
     fetch("/api/media-config")
@@ -327,8 +330,6 @@ const MediaView = ({
       .then((data) => {
         if (data?.storage === "external") {
           setExternalAvailable(true);
-        } else {
-          setMediaSource("git");
         }
       })
       .catch(() => { /* leave defaults */ });
@@ -366,7 +367,20 @@ const MediaView = ({
     if (!swrMediaData) return;
     setData(swrMediaData);
     setError(null);
-  }, [swrMediaData]);
+
+    // Auto-switch: if git listing is empty and external is available,
+    // try external. This handles repos that have migrated to R2 but
+    // still have a git-based media config in .pages.yml.
+    if (
+      !autoSwitched &&
+      externalAvailable &&
+      mediaSource === "git" &&
+      swrMediaData.length === 0
+    ) {
+      setAutoSwitched(true);
+      setMediaSource("external");
+    }
+  }, [swrMediaData, autoSwitched, externalAvailable, mediaSource]);
 
   useEffect(() => {
     if (!swrMediaError) return;
