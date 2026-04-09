@@ -29,13 +29,9 @@ export default function SitePreviewPage() {
 
   const iframeSrc = useMemo(() => {
     if (!config) return "";
-    const params = new URLSearchParams({
-      owner: config.owner,
-      repo: config.repo,
-      branch: config.branch,
-    });
-    if (bustCounter > 0) params.set("v", String(bustCounter));
-    return `${WORKER_URL}/?${params.toString()}`;
+    const base = `${WORKER_URL}/${encodeURIComponent(config.owner)}/${encodeURIComponent(config.repo)}/${encodeURIComponent(config.branch)}/`;
+    if (bustCounter > 0) return `${base}?v=${bustCounter}`;
+    return base;
   }, [config, bustCounter]);
 
   const reload = () => {

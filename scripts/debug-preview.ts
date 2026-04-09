@@ -33,7 +33,7 @@ async function main() {
   // --- Test 1: worker headers ---
   console.log("\n=== Test 1: worker headers ===");
   {
-    const url = `${WORKER}/?owner=lilith&repo=genandlilith&branch=main`;
+    const url = `${WORKER}/lilith/genandlilith/main/`;
     const response = await page.request.get(url);
     console.log(`  Status: ${response.status()}`);
     const headers = response.headers();
@@ -57,7 +57,7 @@ async function main() {
       await route.fulfill({
         status: 200,
         contentType: "text/html",
-        body: `<!DOCTYPE html><html><body><iframe id="preview" src="${WORKER}/?owner=lilith&repo=genandlilith&branch=main" sandbox="allow-same-origin" referrerpolicy="no-referrer" style="width:800px;height:600px;"></iframe></body></html>`,
+        body: `<!DOCTYPE html><html><body><iframe id="preview" src="${WORKER}/lilith/genandlilith/main/" sandbox="allow-same-origin" referrerpolicy="no-referrer" style="width:800px;height:600px;"></iframe></body></html>`,
       });
     });
 

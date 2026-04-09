@@ -60,67 +60,79 @@ function getMimeType(path) {
   return MIME_TYPES[ext] || "application/octet-stream";
 }
 
+/**
+ * URL scheme: path-based so relative assets resolve naturally.
+ *
+ *   /owner/repo/branch/              → render index
+ *   /owner/repo/branch/?entry=path   → render specific entry
+ *   /owner/repo/branch/assets/x.png  → serve asset from git
+ *
+ * Also supports legacy query param format for backwards compat:
+ *   /?owner=X&repo=Y&branch=Z       → redirects to /X/Y/Z/
+ */
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    let owner = url.searchParams.get("owner");
-    let repo = url.searchParams.get("repo");
-    let branch = url.searchParams.get("branch") || "main";
-    const entry = url.searchParams.get("entry");
 
-    // Asset request: no owner/repo params, but has a non-root path.
-    // Parse the Referer to get the repo context from the original preview URL.
-    const assetPath = url.pathname.replace(/^\/+/, "");
-    if ((!owner || !repo) && assetPath && assetPath !== "index.html") {
-      const referer = request.headers.get("Referer");
-      if (referer) {
-        try {
-          const ref = new URL(referer);
-          owner = ref.searchParams.get("owner");
-          repo = ref.searchParams.get("repo");
-          branch = ref.searchParams.get("branch") || branch;
-        } catch {
-          // Invalid referer, fall through
-        }
-      }
-
-      if (owner && repo) {
-        // Serve this asset from the git repo
-        try {
-          const token = await getRepoToken(env.GITHUB_APP_ID, env.GITHUB_APP_PRIVATE_KEY, owner, repo);
-          const response = await fetch(
-            `https://raw.githubusercontent.com/${owner}/${repo}/${encodeURIComponent(branch)}/${assetPath}`,
-            {
-              headers: {
-                Authorization: `token ${token}`,
-                "User-Agent": "interleaved-preview-worker",
-              },
-              cf: { cacheTtl: 300, cacheEverything: true },
-            },
-          );
-
-          if (response.ok) {
-            const body = await response.arrayBuffer();
-            return new Response(body, {
-              headers: {
-                "Content-Type": getMimeType(assetPath),
-                "Cache-Control": "public, max-age=300",
-                "Access-Control-Allow-Origin": "*",
-              },
-            });
-          }
-        } catch {
-          // Fall through to 400
-        }
-
-        return new Response("Asset not found", { status: 404 });
-      }
-
-      return new Response("owner and repo are required", { status: 400 });
+    // Legacy query param format → redirect to path-based
+    const qOwner = url.searchParams.get("owner");
+    const qRepo = url.searchParams.get("repo");
+    if (qOwner && qRepo) {
+      const qBranch = url.searchParams.get("branch") || "main";
+      const qEntry = url.searchParams.get("entry");
+      let redirectPath = `/${qOwner}/${qRepo}/${encodeURIComponent(qBranch)}/`;
+      if (qEntry) redirectPath += `?entry=${encodeURIComponent(qEntry)}`;
+      return Response.redirect(new URL(redirectPath, url.origin).toString(), 302);
     }
 
-    if (!owner || !repo) {
-      return new Response("owner and repo are required", { status: 400 });
+    // Parse path: /owner/repo/branch/[rest...]
+    const parts = url.pathname.replace(/^\/+/, "").split("/");
+    if (parts.length < 3 || !parts[0] || !parts[1]) {
+      return new Response(
+        "URL format: /owner/repo/branch/ (e.g., /lilith/genandlilith/main/)",
+        { status: 400 },
+      );
+    }
+
+    const owner = parts[0];
+    const repo = parts[1];
+    const branch = decodeURIComponent(parts[2]);
+    const restPath = parts.slice(3).join("/"); // everything after /owner/repo/branch/
+    const entry = url.searchParams.get("entry");
+
+    if (!env.GITHUB_APP_ID || !env.GITHUB_APP_PRIVATE_KEY) {
+      return new Response("Worker not configured", { status: 500 });
+    }
+
+    // If restPath is non-empty and looks like a file (has extension), serve as asset
+    if (restPath && restPath.includes(".")) {
+      try {
+        const token = await getRepoToken(env.GITHUB_APP_ID, env.GITHUB_APP_PRIVATE_KEY, owner, repo);
+        const ghResponse = await fetch(
+          `https://raw.githubusercontent.com/${owner}/${repo}/${encodeURIComponent(branch)}/${restPath}`,
+          {
+            headers: {
+              Authorization: `token ${token}`,
+              "User-Agent": "interleaved-preview-worker",
+            },
+            cf: { cacheTtl: 300, cacheEverything: true },
+          },
+        );
+
+        if (ghResponse.ok) {
+          const body = await ghResponse.arrayBuffer();
+          return new Response(body, {
+            headers: {
+              "Content-Type": getMimeType(restPath),
+              "Cache-Control": "public, max-age=300",
+              "Access-Control-Allow-Origin": "*",
+            },
+          });
+        }
+        return new Response("Not found", { status: 404 });
+      } catch (e) {
+        return new Response(`Asset error: ${e.message}`, { status: 500 });
+      }
     }
 
     if (!env.GITHUB_APP_ID || !env.GITHUB_APP_PRIVATE_KEY) {

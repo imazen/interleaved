@@ -60,15 +60,12 @@ export function PreviewPanel({
       return previewUrl || "";
     }
     if (!config) return "";
-    const params = new URLSearchParams({
-      owner: config.owner,
-      repo: config.repo,
-      branch: config.branch,
-    });
+    const base = `${DEFAULT_WORKER}/${encodeURIComponent(config.owner)}/${encodeURIComponent(config.repo)}/${encodeURIComponent(config.branch)}/`;
+    const params = new URLSearchParams();
     if (filePath) params.set("entry", filePath);
-    // cachebust on save version
     if (renderVersion > 0) params.set("v", String(renderVersion));
-    return `${DEFAULT_WORKER}/?${params.toString()}`;
+    const qs = params.toString();
+    return qs ? `${base}?${qs}` : base;
   }, [previewMode, previewUrl, config, filePath, renderVersion]);
 
   // Reload on src change

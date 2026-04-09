@@ -849,7 +849,7 @@ export function Entry({
             <Tooltip>
               <TooltipTrigger asChild>
                 <a
-                  href={`https://preview.interleaved.app/?owner=${encodeURIComponent(config.owner)}&repo=${encodeURIComponent(config.repo)}&branch=${encodeURIComponent(config.branch)}${path ? `&entry=${encodeURIComponent(path)}` : ""}`}
+                  href={`https://preview.interleaved.app/${encodeURIComponent(config.owner)}/${encodeURIComponent(config.repo)}/${encodeURIComponent(config.branch)}/${path ? `?entry=${encodeURIComponent(path)}` : ""}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex h-8 items-center justify-center rounded-md w-8 hover:bg-muted transition-colors"
