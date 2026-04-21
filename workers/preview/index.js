@@ -85,19 +85,59 @@ export default {
       return Response.redirect(new URL(redirectPath, url.origin).toString(), 302);
     }
 
+    // Common asset dir names. When the first path segment matches, the URL
+    // is almost certainly an absolute-path asset that slipped past the
+    // injected <base> tag (HTML <base> only rewrites *relative* URLs, so
+    // `<img src="/assets/foo.jpg">` hits us with no owner/repo prefix).
+    const ASSET_LIKE_PREFIXES = new Set([
+      "assets", "static", "images", "media", "public", "img",
+      "files", "uploads", "fonts", "css", "js",
+    ]);
+
     // Parse path: /owner/repo/branch/[rest...]
     const parts = url.pathname.replace(/^\/+/, "").split("/");
-    if (parts.length < 3 || !parts[0] || !parts[1]) {
-      return new Response(
-        "URL format: /owner/repo/branch/ (e.g., /lilith/genandlilith/main/)",
-        { status: 400 },
-      );
+    let owner, repo, branch, restPath;
+
+    const looksLikeRepoPrefix =
+      parts.length >= 3 &&
+      parts[0] &&
+      parts[1] &&
+      !ASSET_LIKE_PREFIXES.has(parts[0]);
+
+    if (looksLikeRepoPrefix) {
+      owner = parts[0];
+      repo = parts[1];
+      branch = decodeURIComponent(parts[2]);
+      restPath = parts.slice(3).join("/");
+    } else {
+      // Absolute-path asset. Recover owner/repo/branch from the Referer,
+      // which is the preview URL the iframe loaded.
+      const referer = request.headers.get("Referer");
+      if (referer) {
+        try {
+          const refUrl = new URL(referer);
+          const refParts = refUrl.pathname.replace(/^\/+/, "").split("/");
+          if (
+            refParts.length >= 3 &&
+            refParts[0] &&
+            refParts[1] &&
+            !ASSET_LIKE_PREFIXES.has(refParts[0])
+          ) {
+            owner = refParts[0];
+            repo = refParts[1];
+            branch = decodeURIComponent(refParts[2]);
+            restPath = parts.join("/");
+          }
+        } catch { /* malformed Referer → fall through to 400 */ }
+      }
+      if (!owner) {
+        return new Response(
+          "URL format: /owner/repo/branch/ (e.g., /lilith/genandlilith/main/)",
+          { status: 400 },
+        );
+      }
     }
 
-    const owner = parts[0];
-    const repo = parts[1];
-    const branch = decodeURIComponent(parts[2]);
-    const restPath = parts.slice(3).join("/"); // everything after /owner/repo/branch/
     const entry = url.searchParams.get("entry");
 
     if (!env.GITHUB_APP_ID || !env.GITHUB_APP_PRIVATE_KEY) {
