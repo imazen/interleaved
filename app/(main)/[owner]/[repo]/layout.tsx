@@ -4,6 +4,7 @@ import { getToken } from "@/lib/token";
 import { RepoProvider } from "@/contexts/repo-context";
 import { getServerSession } from "@/lib/session-server";
 import { getRepoSnapshot } from "@/lib/github-cache-file";
+import { isExternalStorageConfigured } from "@/lib/media/provider";
 import { GithubAuthExpired } from "@/components/github-auth-expired";
 import { isGithubAuthError } from "@/lib/github-auth";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
@@ -52,7 +53,7 @@ export default async function Layout({
     }
 
     return (
-      <RepoProvider repo={repoInfo}>
+      <RepoProvider repo={{ ...repoInfo, hasExternalStorage: isExternalStorageConfigured() }}>
         {children}
       </RepoProvider>
     );

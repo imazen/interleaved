@@ -43,25 +43,28 @@ const getRelativeUrl = (
   return encode ? encodePath(relativePath) : relativePath;
 }
 
-// Get the raw.githubusercontent.com URL for an image.
+// Resolve a media path to a URL the browser can load directly.
+// Returns either a raw.githubusercontent.com URL (fast path for public
+// git-hosted media) or the URL reported by the media API (which merges
+// git + external storage and handles auth for private repos).
 const getRawUrl = async (
   owner: string,
   repo: string,
   branch: string,
   name: string,
   path: string,
-  isPrivate = false,
+  useMediaApi = false,
   decode = false
 ) => {
   const decodedPath = decode ? decodePathSafely(path) : path;
   const normalizedInputPath = normalizeImagePathInput(decodedPath);
   if (!normalizedInputPath) return null;
-  
-  // For private repos or when we need authenticated access, go through
-  // the media API which handles both git and external storage.
-  // For public repos with git-hosted media, use raw.githubusercontent.com
-  // directly — it's faster and doesn't consume API quota.
-  if (isPrivate) {
+
+  // Route through the media API when:
+  //  - the repo is private (raw.githubusercontent.com would require auth), or
+  //  - external storage is configured (the file may live in R2, not git).
+  // Otherwise prefer raw.githubusercontent.com directly (no API quota, CDN-cached).
+  if (useMediaApi) {
     const filename = canonicalizeFileName(normalizedInputPath);
     if (!filename) return null;
     const parentPath = getParentPath(normalizedInputPath);
@@ -187,14 +190,16 @@ const rawToRelativeUrls = (
   return newHtml;
 }
 
-// Convert all relative image paths in a HTML string to raw.githubusercontent.com URLs.
+// Convert all relative image paths in a HTML string to loadable URLs
+// (raw.githubusercontent.com for public git-hosted media, or the media-API
+// URL when auth/external-storage resolution is needed).
 const relativeToRawUrls = async (
   owner: string,
   repo: string,
   branch: string,
   name: string,
   html: string,
-  isPrivate = false,
+  useMediaApi = false,
   decode = false
 ) => {
   const matches = getImgSrcs(html);
@@ -210,7 +215,7 @@ const relativeToRawUrls = async (
 
   const replacementEntries = await Promise.all(
     uniqueSources.map(async (src) => {
-      const rawUrl = await getRawUrl(owner, repo, branch, name, src, isPrivate, true);
+      const rawUrl = await getRawUrl(owner, repo, branch, name, src, useMediaApi, true);
       return [src, rawUrl] as const;
     }),
   );

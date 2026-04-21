@@ -317,7 +317,8 @@ const rewriteMarkdownImagesAsync = async (
 const EditComponent = forwardRef(
   (props: EditProps, ref: React.Ref<HTMLDivElement>) => {
     const { config } = useConfig();
-    const { isPrivate } = useRepo();
+    const { isPrivate, hasExternalStorage } = useRepo();
+    const useMediaApi = isPrivate || !!hasExternalStorage;
 
     const {
       value,
@@ -450,7 +451,7 @@ const EditComponent = forwardRef(
             config.branch,
             mediaConfig.name,
             normalizedInputPath,
-            isPrivate,
+            useMediaApi,
             true,
           );
           // Keep output-space path canonical when raw URL resolution misses.
@@ -459,7 +460,7 @@ const EditComponent = forwardRef(
           return canonicalOutputPath;
         }
       },
-      [config, isPrivate, mediaConfig],
+      [config, useMediaApi, mediaConfig],
     );
 
     const toCanonicalImageUrl = useCallback(
@@ -507,7 +508,7 @@ const EditComponent = forwardRef(
             config.branch,
             mediaConfig.name,
             withInputPrefix,
-            isPrivate,
+            useMediaApi,
           );
         }
 
@@ -526,11 +527,11 @@ const EditComponent = forwardRef(
           config.branch,
           mediaConfig.name,
           withInputPrefixEverywhere,
-          isPrivate,
+          useMediaApi,
         );
         return rewriteMarkdownImagesAsync(htmlNormalized, toDisplayImageUrl);
       },
-      [config, format, isPrivate, mediaConfig, toDisplayImageUrl],
+      [config, format, useMediaApi, mediaConfig, toDisplayImageUrl],
     );
 
     const editorToSource = useCallback(

@@ -26,9 +26,10 @@ export function Thumbnail({
   const [rawUrl, setRawUrl] = useState<string | null>(url || null);
   const [error, setError] = useState<string | null>(null);
 
-  const { owner, repo, isPrivate } = useRepo();
+  const { owner, repo, isPrivate, hasExternalStorage } = useRepo();
   const { config } = useConfig();
   const branch = config?.branch!;
+  const useMediaApi = isPrivate || !!hasExternalStorage;
 
   useEffect(() => {
     // If the caller provided a URL (external storage), just use it
@@ -48,7 +49,7 @@ export function Thumbnail({
     (async () => {
       try {
         setError(null);
-        const resolved = await getRawUrl(owner, repo, branch, name, path, isPrivate);
+        const resolved = await getRawUrl(owner, repo, branch, name, path, useMediaApi);
         if (!cancelled) setRawUrl(resolved);
       } catch (e: any) {
         if (cancelled) return;
@@ -61,7 +62,7 @@ export function Thumbnail({
     return () => {
       cancelled = true;
     };
-  }, [path, owner, repo, branch, isPrivate, name, url]);
+  }, [path, owner, repo, branch, useMediaApi, name, url]);
 
   return (
     <div
