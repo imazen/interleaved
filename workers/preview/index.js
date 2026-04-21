@@ -85,59 +85,19 @@ export default {
       return Response.redirect(new URL(redirectPath, url.origin).toString(), 302);
     }
 
-    // Common asset dir names. When the first path segment matches, the URL
-    // is almost certainly an absolute-path asset that slipped past the
-    // injected <base> tag (HTML <base> only rewrites *relative* URLs, so
-    // `<img src="/assets/foo.jpg">` hits us with no owner/repo prefix).
-    const ASSET_LIKE_PREFIXES = new Set([
-      "assets", "static", "images", "media", "public", "img",
-      "files", "uploads", "fonts", "css", "js",
-    ]);
-
     // Parse path: /owner/repo/branch/[rest...]
     const parts = url.pathname.replace(/^\/+/, "").split("/");
-    let owner, repo, branch, restPath;
-
-    const looksLikeRepoPrefix =
-      parts.length >= 3 &&
-      parts[0] &&
-      parts[1] &&
-      !ASSET_LIKE_PREFIXES.has(parts[0]);
-
-    if (looksLikeRepoPrefix) {
-      owner = parts[0];
-      repo = parts[1];
-      branch = decodeURIComponent(parts[2]);
-      restPath = parts.slice(3).join("/");
-    } else {
-      // Absolute-path asset. Recover owner/repo/branch from the Referer,
-      // which is the preview URL the iframe loaded.
-      const referer = request.headers.get("Referer");
-      if (referer) {
-        try {
-          const refUrl = new URL(referer);
-          const refParts = refUrl.pathname.replace(/^\/+/, "").split("/");
-          if (
-            refParts.length >= 3 &&
-            refParts[0] &&
-            refParts[1] &&
-            !ASSET_LIKE_PREFIXES.has(refParts[0])
-          ) {
-            owner = refParts[0];
-            repo = refParts[1];
-            branch = decodeURIComponent(refParts[2]);
-            restPath = parts.join("/");
-          }
-        } catch { /* malformed Referer → fall through to 400 */ }
-      }
-      if (!owner) {
-        return new Response(
-          "URL format: /owner/repo/branch/ (e.g., /lilith/genandlilith/main/)",
-          { status: 400 },
-        );
-      }
+    if (parts.length < 3 || !parts[0] || !parts[1]) {
+      return new Response(
+        "URL format: /owner/repo/branch/ (e.g., /lilith/genandlilith/main/)",
+        { status: 400 },
+      );
     }
 
+    const owner = parts[0];
+    const repo = parts[1];
+    const branch = decodeURIComponent(parts[2]);
+    const restPath = parts.slice(3).join("/");
     const entry = url.searchParams.get("entry");
 
     if (!env.GITHUB_APP_ID || !env.GITHUB_APP_PRIVATE_KEY) {
@@ -422,10 +382,18 @@ export default {
         </body></html>`;
       }
 
-      // Inject <base> tag so absolute paths (/assets/x.jpg) resolve
-      // within the repo prefix (/owner/repo/branch/assets/x.jpg).
-      // Also handles CSS url('/assets/...') and JS fetch('/content/...').
-      const baseHref = `/${owner}/${repo}/${encodeURIComponent(branch)}/`;
+      // Rewrite absolute-path asset references to include the repo prefix.
+      // HTML <base href> only rewrites *relative* URLs, so <img src="/assets/x">
+      // would otherwise hit preview.interleaved.app/assets/x with no repo
+      // context (and the iframe's referrerpolicy="no-referrer" rules out
+      // Referer-based recovery). Rewriting in the rendered HTML removes
+      // the ambiguity entirely.
+      const prefix = `/${owner}/${repo}/${encodeURIComponent(branch)}`;
+      html = rewriteAbsolutePathUrls(html, prefix);
+
+      // Keep the <base> tag for *relative* URLs — templates that reference
+      // "assets/x.jpg" (no leading slash) still need it to resolve correctly.
+      const baseHref = `${prefix}/`;
       const baseTag = `<base href="${baseHref}">`;
       if (html.includes("<head>")) {
         html = html.replace("<head>", `<head>${baseTag}`);
@@ -471,4 +439,49 @@ function escapeHtml(str) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+/**
+ * Prepend the repo prefix to absolute-path URLs in rendered HTML so
+ * asset requests land with full routing context. Protocol-relative
+ * (`//cdn.com`), scheme-qualified (`https://…`), fragment, data and
+ * mailto URLs are left alone.
+ *
+ *   <img src="/assets/x.jpg">   →  <img src="/owner/repo/branch/assets/x.jpg">
+ *   <link href="/css/main.css"> →  <link href="/owner/repo/branch/css/main.css">
+ *   url(/bg.png)                →  url(/owner/repo/branch/bg.png)
+ *   srcset="/a 1x, /b 2x"       →  srcset="/owner/repo/branch/a 1x, …"
+ *
+ * Note: only rewrites rendered HTML. CSS files served as static assets
+ * keep their own absolute-path url() references; those still resolve
+ * against the origin (preview.interleaved.app/…) but the browser-side
+ * base tag does not affect external stylesheets either way. If an
+ * external stylesheet uses absolute-path url(), it'll need relative
+ * paths in the source instead — same constraint that already applies
+ * to <link href="…"> inside the file.
+ */
+function rewriteAbsolutePathUrls(html, prefix) {
+  // src / href / action / poster / formaction / data-*src attributes.
+  // Negative lookahead on "/" skips protocol-relative //cdn.com/…
+  html = html.replace(
+    /(\s(?:src|href|action|poster|formaction)=(["']))\/(?!\/)/gi,
+    `$1${prefix}/`,
+  );
+
+  // srcset: multiple URL+descriptor pairs, comma-separated.
+  html = html.replace(
+    /(\ssrcset=(["']))([^"']*)(\2)/gi,
+    (_m, p1, _q, value, endQ) => {
+      const rewritten = value.replace(/(^|,\s*)\/(?!\/)/g, `$1${prefix}/`);
+      return `${p1}${rewritten}${endQ}`;
+    },
+  );
+
+  // CSS url(/x), url("/x"), url('/x') in <style> blocks and inline style="".
+  html = html.replace(
+    /url\(\s*(["']?)\/(?!\/)/gi,
+    `url($1${prefix}/`,
+  );
+
+  return html;
 }
