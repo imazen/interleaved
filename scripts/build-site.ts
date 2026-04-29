@@ -69,19 +69,23 @@ async function main() {
 const start = Date.now();
 const renderer = new SiteRenderer();
 
-// Step 1: Load templates (.html and .liquid)
+// Step 1: Load templates (.html, .liquid, and .md partials)
 const templatesDir = path.join(SRC, "templates");
 if (fs.existsSync(templatesDir)) {
   for (const file of readDir(templatesDir)) {
-    if (!/\.(html|liquid)$/i.test(file)) continue;
+    if (!/\.(html|liquid|md|markdown)$/i.test(file)) continue;
     const name = path.relative(templatesDir, file)
-      .replace(/\.(html|liquid)$/i, "")
+      .replace(/\.(html|liquid|md|markdown)$/i, "")
       .replace(/\\/g, "/");
     const source = fs.readFileSync(file, "utf-8");
 
-    // Files starting with _ are partials
-    if (path.basename(file).startsWith("_")) {
-      renderer.registerPartial(name.replace(/^_/, ""), source);
+    // Files starting with _ are partials. .md/.markdown files are always
+    // partials (it's unusual to use raw markdown as a top-level template).
+    const isPartial =
+      path.basename(file).startsWith("_") ||
+      /\.(md|markdown)$/i.test(file);
+    if (isPartial) {
+      renderer.registerPartial(name.replace(/^_/, "").replace(/\/_/, "/"), source);
     } else {
       renderer.registerTemplate(name, source);
     }
@@ -113,7 +117,7 @@ if (fs.existsSync(contentDir)) {
     const rel = path.relative(contentDir, file).replace(/\\/g, "/");
     const ext = path.extname(file).toLowerCase();
 
-    if (ext === ".md" || ext === ".mdx" || ext === ".markdown") {
+    if (ext === ".md" || ext === ".mdx" || ext === ".markdown" || ext === ".html") {
       const content = fs.readFileSync(file, "utf-8");
       const rendered = await renderer.renderMarkdown(rel, content);
       const outPath = path.join(OUT, rendered.outputPath);
@@ -133,13 +137,18 @@ if (fs.existsSync(contentDir)) {
   }
 }
 
-// Step 4: Render index page if template exists
-const indexHtml = await renderer.renderCollectionIndex("index", pages, "posts");
-if (indexHtml) {
-  const outPath = path.join(OUT, "index.html");
-  ensureDir(outPath);
-  fs.writeFileSync(outPath, indexHtml);
-  fileCount++;
+// Step 4: Render index page if there's no content/index.{md,html,json,toml}
+// already producing one. When the user has their own index page, they
+// own the layout — passing posts via global context is enough.
+const userOwnedIndex = pages.some((p) => p.outputPath === "index.html");
+if (!userOwnedIndex) {
+  const indexHtml = await renderer.renderCollectionIndex("index", pages, "posts");
+  if (indexHtml) {
+    const outPath = path.join(OUT, "index.html");
+    ensureDir(outPath);
+    fs.writeFileSync(outPath, indexHtml);
+    fileCount++;
+  }
 }
 
 // Step 5: Copy static files

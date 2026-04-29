@@ -94,7 +94,10 @@ export class SiteRenderer {
     const body = (frontmatter.body as string) ?? "";
     delete frontmatter.body;
 
-    const bodyHtml = marked.parse(body) as string;
+    // .html / .htm files have raw HTML bodies — skip the markdown pass so we
+    // don't double-process. Everything else goes through marked.
+    const isHtml = /\.html?$/i.test(filePath);
+    const bodyHtml = isHtml ? body : (marked.parse(body) as string);
 
     const layout = this.resolveLayout(
       frontmatter.layout as string | undefined,

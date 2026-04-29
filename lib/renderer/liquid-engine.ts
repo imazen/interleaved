@@ -43,7 +43,11 @@ export class LiquidEngine implements TemplateEngine {
   }
 
   private normalizePartialKey(name: string): string {
-    return name.replace(/\.(liquid|html|hbs)$/i, "").replace(/^\/+/, "");
+    // Strip extension and leading slashes so callers can reference partials
+    // by bare name regardless of how they were originally named on disk.
+    return name
+      .replace(/\.(liquid|html|hbs|md|markdown)$/i, "")
+      .replace(/^\/+/, "");
   }
 
   registerTemplate(name: string, source: string): void {

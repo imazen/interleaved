@@ -246,7 +246,9 @@ export class WorkerRenderer {
   }
 
   normPartialKey(name) {
-    return String(name).replace(/\.(liquid|html|hbs)$/i, "").replace(/^\/+/, "");
+    return String(name)
+      .replace(/\.(liquid|html|hbs|md|markdown)$/i, "")
+      .replace(/^\/+/, "");
   }
 
   lookupPartial(name) {
