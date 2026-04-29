@@ -3,35 +3,36 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{site.name}}</title>
-  {{#if site.description}}<meta name="description" content="{{site.description}}">{{/if}}
+  <title>{{ site.name }}</title>
+  {% if site.description %}<meta name="description" content="{{ site.description }}">{% endif %}
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@3/dist/tailwind.min.css" rel="stylesheet">
 </head>
 <body class="bg-white text-gray-900 min-h-screen">
-  {{> header}}
+  {% include "header" %}
   <main class="px-4 py-8 mx-auto max-w-3xl">
-    {{#if site.description}}
-    <p class="text-lg text-gray-600 mb-8">{{site.description}}</p>
-    {{/if}}
+    {% if site.description %}
+    <p class="text-lg text-gray-600 mb-8">{{ site.description }}</p>
+    {% endif %}
 
-    {{#if posts}}
+    {% if posts %}
+    {% assign sorted = posts | sortBy: "date", "desc" %}
     <ul class="space-y-6">
-      {{#each (sortBy posts "date" "desc")}}
+      {% for post in sorted %}
       <li>
-        <a href="{{this.url}}" class="group block">
-          <h2 class="text-xl font-semibold group-hover:text-blue-600 transition-colors">{{this.title}}</h2>
-          {{#if this.date}}
-          <time class="text-sm text-gray-400 mt-1 block" datetime="{{this.date}}">{{formatDate this.date}}</time>
-          {{/if}}
-          {{#if this.description}}
-          <p class="text-gray-600 mt-1">{{this.description}}</p>
-          {{/if}}
+        <a href="{{ post.url }}" class="group block">
+          <h2 class="text-xl font-semibold group-hover:text-blue-600 transition-colors">{{ post.title }}</h2>
+          {% if post.date %}
+          <time class="text-sm text-gray-400 mt-1 block" datetime="{{ post.date }}">{{ post.date | formatDate }}</time>
+          {% endif %}
+          {% if post.description %}
+          <p class="text-gray-600 mt-1">{{ post.description }}</p>
+          {% endif %}
         </a>
       </li>
-      {{/each}}
+      {% endfor %}
     </ul>
-    {{/if}}
+    {% endif %}
   </main>
-  {{> footer}}
+  {% include "footer" %}
 </body>
 </html>

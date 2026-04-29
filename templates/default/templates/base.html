@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{#if title}}{{title}} — {{site.name}}{{else}}{{site.name}}{{/if}}</title>
-  {{#if description}}<meta name="description" content="{{description}}">{{/if}}
+  <title>{% if title %}{{ title }} — {{ site.name }}{% else %}{{ site.name }}{% endif %}</title>
+  {% if description %}<meta name="description" content="{{ description }}">{% endif %}
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@3/dist/tailwind.min.css" rel="stylesheet">
   <style>
     .prose { max-width: 65ch; }
@@ -23,10 +23,10 @@
   </style>
 </head>
 <body class="bg-white text-gray-900 min-h-screen">
-  {{> header}}
+  {% include "header" %}
   <main class="px-4 py-8 mx-auto max-w-3xl">
-    {{{body}}}
+    {{ body }}
   </main>
-  {{> footer}}
+  {% include "footer" %}
 </body>
 </html>

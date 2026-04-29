@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{title}} — {{site.name}}</title>
-  {{#if description}}<meta name="description" content="{{description}}">{{/if}}
+  <title>{{ title }} — {{ site.name }}</title>
+  {% if description %}<meta name="description" content="{{ description }}">{% endif %}
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@3/dist/tailwind.min.css" rel="stylesheet">
   <style>
     .prose { max-width: 65ch; }
@@ -23,23 +23,23 @@
   </style>
 </head>
 <body class="bg-white text-gray-900 min-h-screen">
-  {{> header}}
+  {% include "header" %}
   <main class="px-4 py-8 mx-auto max-w-3xl">
     <article>
       <header class="mb-8">
-        <h1 class="text-3xl font-bold tracking-tight">{{title}}</h1>
-        {{#if date}}
-        <time class="text-sm text-gray-500 mt-2 block" datetime="{{date}}">{{formatDate date}}</time>
-        {{/if}}
-        {{#if description}}
-        <p class="text-gray-600 mt-3 text-lg">{{description}}</p>
-        {{/if}}
+        <h1 class="text-3xl font-bold tracking-tight">{{ title }}</h1>
+        {% if date %}
+        <time class="text-sm text-gray-500 mt-2 block" datetime="{{ date }}">{{ date | formatDate }}</time>
+        {% endif %}
+        {% if description %}
+        <p class="text-gray-600 mt-3 text-lg">{{ description }}</p>
+        {% endif %}
       </header>
       <div class="prose">
-        {{{content}}}
+        {{ content }}
       </div>
     </article>
   </main>
-  {{> footer}}
+  {% include "footer" %}
 </body>
 </html>

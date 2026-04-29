@@ -75,6 +75,7 @@
     "drizzle-orm": "^0.45.2",
     "handlebars": "^4.7.9",
     "joplin-turndown-plugin-gfm": "^1.0.12",
+    "liquidjs": "^10.25.7",
     "lodash.merge": "^4.6.2",
     "lodash.mergewith": "^4.6.2",
     "lucide-react": "^1.7.0",

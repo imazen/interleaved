@@ -2,22 +2,24 @@
 /**
  * Static site generator for Interleaved.
  *
- * Reads content (markdown + JSON), templates (Handlebars .html), and data
- * (.json) from a source directory, renders everything, and writes to _site/.
+ * Reads content (markdown + JSON/TOML), templates (Liquid .html / .liquid),
+ * and data (.json / .toml) from a source directory, renders everything,
+ * and writes to _site/.
  *
  * Usage:
  *   npx tsx scripts/build-site.ts [--src ./my-site] [--out ./_site]
  *
  * Directory structure expected:
- *   templates/     — Handlebars .html files (base.html, post.html, index.html)
- *   content/       — Markdown and JSON content files
- *   data/          — Global JSON data files (site.json, etc.)
+ *   templates/     — Liquid .html / .liquid files (base, post, index, ...)
+ *   content/       — Markdown and JSON/TOML content files
+ *   data/          — Global JSON/TOML data files (site.json, nav.toml, etc.)
  *   static/        — Copied as-is to output
  */
 
 import fs from "fs";
 import path from "path";
 import { SiteRenderer } from "../lib/renderer";
+import { parse as parseSerialization } from "../lib/serialization";
 
 const args = process.argv.slice(2);
 function getArg(name: string, fallback: string): string {
@@ -63,16 +65,17 @@ function copyDir(src: string, dest: string) {
   }
 }
 
+async function main() {
 const start = Date.now();
 const renderer = new SiteRenderer();
 
-// Step 1: Load templates
+// Step 1: Load templates (.html and .liquid)
 const templatesDir = path.join(SRC, "templates");
 if (fs.existsSync(templatesDir)) {
   for (const file of readDir(templatesDir)) {
-    if (!file.endsWith(".html")) continue;
+    if (!/\.(html|liquid)$/i.test(file)) continue;
     const name = path.relative(templatesDir, file)
-      .replace(/\.html$/, "")
+      .replace(/\.(html|liquid)$/i, "")
       .replace(/\\/g, "/");
     const source = fs.readFileSync(file, "utf-8");
 
@@ -85,20 +88,24 @@ if (fs.existsSync(templatesDir)) {
   }
 }
 
-// Step 2: Load global data
+// Step 2: Load global data (.json or .toml)
 const dataDir = path.join(SRC, "data");
 if (fs.existsSync(dataDir)) {
   for (const file of readDir(dataDir)) {
-    if (!file.endsWith(".json")) continue;
-    const name = path.basename(file, ".json");
-    const data = JSON.parse(fs.readFileSync(file, "utf-8"));
+    const ext = path.extname(file).toLowerCase();
+    if (ext !== ".json" && ext !== ".toml") continue;
+    const name = path.basename(file).replace(/\.(json|toml)$/i, "");
+    const raw = fs.readFileSync(file, "utf-8");
+    const data = parseSerialization(raw, {
+      format: ext === ".toml" ? "toml" : "json",
+    });
     renderer.registerData(name, data);
   }
 }
 
 // Step 3: Render content
 const contentDir = path.join(SRC, "content");
-const pages: ReturnType<typeof renderer.renderMarkdown>[] = [];
+const pages: Awaited<ReturnType<typeof renderer.renderMarkdown>>[] = [];
 let fileCount = 0;
 
 if (fs.existsSync(contentDir)) {
@@ -108,15 +115,15 @@ if (fs.existsSync(contentDir)) {
 
     if (ext === ".md" || ext === ".mdx" || ext === ".markdown") {
       const content = fs.readFileSync(file, "utf-8");
-      const rendered = renderer.renderMarkdown(rel, content);
+      const rendered = await renderer.renderMarkdown(rel, content);
       const outPath = path.join(OUT, rendered.outputPath);
       ensureDir(outPath);
       fs.writeFileSync(outPath, rendered.html);
       pages.push(rendered);
       fileCount++;
-    } else if (ext === ".json") {
+    } else if (ext === ".json" || ext === ".toml") {
       const content = fs.readFileSync(file, "utf-8");
-      const rendered = renderer.renderJson(rel, content);
+      const rendered = await renderer.renderJson(rel, content);
       const outPath = path.join(OUT, rendered.outputPath);
       ensureDir(outPath);
       fs.writeFileSync(outPath, rendered.html);
@@ -127,7 +134,7 @@ if (fs.existsSync(contentDir)) {
 }
 
 // Step 4: Render index page if template exists
-const indexHtml = renderer.renderCollectionIndex("index", pages, "posts");
+const indexHtml = await renderer.renderCollectionIndex("index", pages, "posts");
 if (indexHtml) {
   const outPath = path.join(OUT, "index.html");
   ensureDir(outPath);
@@ -140,3 +147,9 @@ copyDir(path.join(SRC, "static"), OUT);
 
 const elapsed = Date.now() - start;
 console.log(`Built ${fileCount} pages in ${elapsed}ms → ${OUT}`);
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

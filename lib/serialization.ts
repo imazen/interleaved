@@ -9,13 +9,32 @@ type FrontmatterFormat = "json-frontmatter" | "yaml-frontmatter" | "toml-frontma
 type SerialFormat = "json" | "yaml" | "toml";
 type Format = FrontmatterFormat | SerialFormat;
 
+/**
+ * Auto-detect frontmatter format from a content prefix.
+ *   `+++\n…\n+++` → toml-frontmatter
+ *   `---\n…\n---` → yaml-frontmatter
+ *   `{…}`         → json-frontmatter
+ * Returns null when no recognizable delimiter is present.
+ */
+const detectFrontmatterFormat = (content: string): FrontmatterFormat | null => {
+  const head = content.replace(/^﻿/, "").trimStart();
+  if (head.startsWith("+++")) return "toml-frontmatter";
+  if (head.startsWith("---")) return "yaml-frontmatter";
+  if (head.startsWith("{")) return "json-frontmatter";
+  return null;
+};
+
 // Parse straight YAML/JSON/TOML and YAML/JSON/TOML frontmatter strings into an object
 const parse = (content: string = "", options: { delimiters?: string, format?: Format } = {}) => {
-  const format = options.format || "yaml-frontmatter";
-  
+  // No explicit format: auto-detect from content. Defaults preserve
+  // the historical "yaml-frontmatter" behavior when no delimiter is found.
+  const format = options.format
+    || detectFrontmatterFormat(content)
+    || "yaml-frontmatter";
+
   // YAML/JSON/TOML without frontmatter
   if (["yaml", "json", "toml"].includes(format)) return deserialize(content, format as SerialFormat);
-  
+
   const delimiters = setDelimiter(options.delimiters, format as FrontmatterFormat);
   const isDefaultJsonFrontmatter = (
     format === "json-frontmatter" &&
@@ -130,4 +149,4 @@ const setDelimiter = (delimiters: string | [string, string] | null | undefined, 
   }
 };
 
-export { parse, stringify };
+export { parse, stringify, detectFrontmatterFormat };

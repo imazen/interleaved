@@ -15,15 +15,23 @@ test.describe("Preview modes", () => {
 
   test.beforeEach(() => {
     renderer = new SiteRenderer();
-    // Standard templates
-    renderer.registerTemplate("base", "<html><body><h1>{{title}}</h1>{{{content}}}</body></html>");
-    renderer.registerTemplate("post", "<article><h1>{{title}}</h1><time>{{date}}</time>{{{content}}}</article>");
-    renderer.registerTemplate("index", "<html><body><h1>{{site.name}}</h1><ul>{{#each posts}}<li><a href=\"{{this.url}}\">{{this.title}}</a></li>{{/each}}</ul></body></html>");
+    renderer.registerTemplate(
+      "base",
+      "<html><body><h1>{{ title }}</h1>{{ content }}</body></html>",
+    );
+    renderer.registerTemplate(
+      "post",
+      "<article><h1>{{ title }}</h1><time>{{ date }}</time>{{ content }}</article>",
+    );
+    renderer.registerTemplate(
+      "index",
+      "<html><body><h1>{{ site.name }}</h1><ul>{% for post in posts %}<li><a href=\"{{ post.url }}\">{{ post.title }}</a></li>{% endfor %}</ul></body></html>",
+    );
     renderer.registerData("site", { name: "Test Site", description: "A test" });
   });
 
-  test("entry mode: markdown renders through post template", () => {
-    const result = renderer.renderMarkdown("posts/hello.md", [
+  test("entry mode: markdown renders through post template", async () => {
+    const result = await renderer.renderMarkdown("posts/hello.md", [
       "---",
       "title: Hello World",
       "date: 2026-04-08",
@@ -37,8 +45,8 @@ test.describe("Preview modes", () => {
     expect(result.html).toContain("2026-04-08");
   });
 
-  test("entry mode: JSON content uses base template", () => {
-    const result = renderer.renderJson(
+  test("entry mode: JSON content uses base template", async () => {
+    const result = await renderer.renderJson(
       "about.json",
       JSON.stringify({ title: "About Us", layout: "base", content: "<p>info</p>" }),
     );
@@ -46,30 +54,28 @@ test.describe("Preview modes", () => {
     expect(result.html).toContain("<h1>About Us</h1>");
   });
 
-  test("data file edit: reregistering data updates index render", () => {
-    // Render index with original data
+  test("data file edit: reregistering data updates index render", async () => {
     const items = [
       { html: "", frontmatter: { title: "Post A" }, path: "a.md", outputPath: "a.html" },
     ];
-    const original = renderer.renderCollectionIndex("index", items);
+    const original = await renderer.renderCollectionIndex("index", items);
     expect(original).toContain("Test Site");
 
-    // Simulate data file edit: re-register with new data
     renderer.registerData("site", { name: "Updated Site Name", description: "new" });
 
-    const updated = renderer.renderCollectionIndex("index", items);
+    const updated = await renderer.renderCollectionIndex("index", items);
     expect(updated).toContain("Updated Site Name");
     expect(updated).not.toContain("Test Site");
   });
 
-  test("site mode: index renders all collection items", () => {
+  test("site mode: index renders all collection items", async () => {
     const items = [
       { html: "", frontmatter: { title: "First Post", date: "2026-01-01" }, path: "posts/a.md", outputPath: "posts/a.html" },
       { html: "", frontmatter: { title: "Second Post", date: "2026-02-01" }, path: "posts/b.md", outputPath: "posts/b.html" },
       { html: "", frontmatter: { title: "Third Post", date: "2026-03-01" }, path: "posts/c.md", outputPath: "posts/c.html" },
     ];
 
-    const html = renderer.renderCollectionIndex("index", items);
+    const html = await renderer.renderCollectionIndex("index", items);
 
     expect(html).toContain("First Post");
     expect(html).toContain("Second Post");
@@ -77,20 +83,17 @@ test.describe("Preview modes", () => {
     expect(html).toContain("/posts/a.html");
   });
 
-  test("site mode: index handles empty collection", () => {
-    const html = renderer.renderCollectionIndex("index", []);
+  test("site mode: index handles empty collection", async () => {
+    const html = await renderer.renderCollectionIndex("index", []);
     expect(html).toContain("Test Site");
-    // Empty list — no <li> items
     expect(html).toMatch(/<ul>\s*<\/ul>/);
   });
 
-  test("missing index template falls back gracefully", () => {
+  test("missing index template falls back gracefully", async () => {
     const r = new SiteRenderer();
-    r.registerTemplate("base", "<html><body>{{site.name}}</body></html>");
+    r.registerTemplate("base", "<html><body>{{ site.name }}</body></html>");
     r.registerData("site", { name: "Fallback" });
-    // No "index" template — should fall back to base
-    const html = r.renderCollectionIndex("index", []);
-    // base template doesn't have posts loop, but should still render
+    const html = await r.renderCollectionIndex("index", []);
     expect(html).toContain("Fallback");
   });
 
@@ -101,7 +104,6 @@ test.describe("Preview modes", () => {
       "_data/nested/menu.json",
     ];
     for (const path of dataFilePaths) {
-      // Match the same regex used in the preview API
       const isDataFile = !!path.match(/^_?data\//);
       expect(isDataFile).toBe(true);
     }
@@ -112,7 +114,7 @@ test.describe("Preview modes", () => {
       "posts/hello.md",
       "content/about.md",
       "src/content/blog/intro.md",
-      "about.json", // single JSON, not in data dir
+      "about.json",
     ];
     for (const path of contentPaths) {
       const isDataFile = !!path.match(/^_?data\//);
@@ -120,8 +122,11 @@ test.describe("Preview modes", () => {
     }
   });
 
-  test("nested data references: site.nav array works in templates", () => {
-    renderer.registerTemplate("nav", "<nav>{{#each site.nav}}<a href=\"{{this.url}}\">{{this.label}}</a>{{/each}}</nav>");
+  test("nested data references: site.nav array works in templates", async () => {
+    renderer.registerTemplate(
+      "nav",
+      "<nav>{% for item in site.nav %}<a href=\"{{ item.url }}\">{{ item.label }}</a>{% endfor %}</nav>",
+    );
     renderer.registerData("site", {
       name: "Site",
       nav: [
@@ -130,24 +135,30 @@ test.describe("Preview modes", () => {
       ],
     });
 
-    const html = renderer.renderCollectionIndex("nav", []);
+    const html = await renderer.renderCollectionIndex("nav", []);
     expect(html).toContain('<a href="/">Home</a>');
     expect(html).toContain('<a href="/about">About</a>');
   });
 
-  test("date formatting helper works in index template", () => {
-    renderer.registerTemplate("index", "{{#each posts}}<time>{{formatDate this.date}}</time>{{/each}}");
+  test("date formatting filter works in index template", async () => {
+    renderer.registerTemplate(
+      "index",
+      "{% for post in posts %}<time>{{ post.date | formatDate }}</time>{% endfor %}",
+    );
 
     const items = [
       { html: "", frontmatter: { title: "X", date: "2026-04-08" }, path: "x.md", outputPath: "x.html" },
     ];
-    const html = renderer.renderCollectionIndex("index", items);
+    const html = await renderer.renderCollectionIndex("index", items);
     expect(html).toContain("April");
     expect(html).toContain("2026");
   });
 
-  test("sortBy helper sorts collection items", () => {
-    renderer.registerTemplate("index", "{{#each (sortBy posts \"date\" \"desc\")}}<li>{{this.title}}</li>{{/each}}");
+  test("sortBy filter sorts collection items", async () => {
+    renderer.registerTemplate(
+      "index",
+      "{% assign sorted = posts | sortBy: \"date\", \"desc\" %}{% for post in sorted %}<li>{{ post.title }}</li>{% endfor %}",
+    );
 
     const items = [
       { html: "", frontmatter: { title: "Old", date: "2025-01-01" }, path: "a.md", outputPath: "a.html" },
@@ -155,7 +166,7 @@ test.describe("Preview modes", () => {
       { html: "", frontmatter: { title: "Mid", date: "2025-06-01" }, path: "c.md", outputPath: "c.html" },
     ];
 
-    const html = renderer.renderCollectionIndex("index", items);
+    const html = await renderer.renderCollectionIndex("index", items);
     const newIdx = html.indexOf("New");
     const midIdx = html.indexOf("Mid");
     const oldIdx = html.indexOf("Old");
