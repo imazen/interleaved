@@ -333,6 +333,24 @@ export default {
         }
       }
 
+      // Pre-scan all content frontmatter so site.posts / site.pages /
+      // site.categories.<x> / site.tags.<x> are visible during render.
+      // Mirrors the two-pass approach in scripts/build-site.ts.
+      for (const [path, content] of Object.entries(posts)) {
+        try {
+          const { frontmatter } = renderer.parseFrontmatter(content);
+          // Strip a leading content/ or src/content/ to get the URL-shaped path
+          const rel = path
+            .replace(/^content\//, "")
+            .replace(/^src\/content\//, "")
+            .replace(/^posts\//, "posts/")
+            .replace(/^_posts\//, "posts/");
+          renderer.registerContent(rel, frontmatter);
+        } catch {
+          // Ignore unparseable frontmatter
+        }
+      }
+
       // 8. Render based on resolved mode
       let html;
 

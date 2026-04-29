@@ -107,10 +107,13 @@ if (fs.existsSync(dataDir)) {
   }
 }
 
-// Step 3: Render content
+// Step 3a: Scan content for frontmatter so site.posts / site.pages /
+// site.categories / site.tags collections are available to every render.
+type Pending =
+  | { kind: "md"; rel: string; content: string }
+  | { kind: "data"; rel: string; content: string };
+const pending: Pending[] = [];
 const contentDir = path.join(SRC, "content");
-const pages: Awaited<ReturnType<typeof renderer.renderMarkdown>>[] = [];
-let fileCount = 0;
 
 if (fs.existsSync(contentDir)) {
   for (const file of readDir(contentDir)) {
@@ -119,22 +122,34 @@ if (fs.existsSync(contentDir)) {
 
     if (ext === ".md" || ext === ".mdx" || ext === ".markdown" || ext === ".html") {
       const content = fs.readFileSync(file, "utf-8");
-      const rendered = await renderer.renderMarkdown(rel, content);
-      const outPath = path.join(OUT, rendered.outputPath);
-      ensureDir(outPath);
-      fs.writeFileSync(outPath, rendered.html);
-      pages.push(rendered);
-      fileCount++;
+      const fm = parseSerialization(content) as Record<string, unknown>;
+      const frontmatter = { ...fm };
+      delete frontmatter.body;
+      renderer.registerContent(rel, frontmatter);
+      pending.push({ kind: "md", rel, content });
     } else if (ext === ".json" || ext === ".toml") {
       const content = fs.readFileSync(file, "utf-8");
-      const rendered = await renderer.renderJson(rel, content);
-      const outPath = path.join(OUT, rendered.outputPath);
-      ensureDir(outPath);
-      fs.writeFileSync(outPath, rendered.html);
-      pages.push(rendered);
-      fileCount++;
+      const fm = parseSerialization(content, {
+        format: ext === ".toml" ? "toml" : "json",
+      }) as Record<string, unknown>;
+      renderer.registerContent(rel, fm);
+      pending.push({ kind: "data", rel, content });
     }
   }
+}
+
+// Step 3b: Render content with collections available.
+const pages: Awaited<ReturnType<typeof renderer.renderMarkdown>>[] = [];
+let fileCount = 0;
+for (const item of pending) {
+  const rendered = item.kind === "md"
+    ? await renderer.renderMarkdown(item.rel, item.content)
+    : await renderer.renderJson(item.rel, item.content);
+  const outPath = path.join(OUT, rendered.outputPath);
+  ensureDir(outPath);
+  fs.writeFileSync(outPath, rendered.html);
+  pages.push(rendered);
+  fileCount++;
 }
 
 // Step 4: Render index page if there's no content/index.{md,html,json,toml}

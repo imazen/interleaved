@@ -224,6 +224,8 @@ export class WorkerRenderer {
     this.partials = new Map();
     this.data = new Map();
     this.templates = new Map();
+    this.content = [];
+    this.collectionsCache = null;
 
     this.liquid = new Liquid({
       cache: true,
@@ -271,9 +273,70 @@ export class WorkerRenderer {
     this.data.set(name, value);
   }
 
+  /**
+   * Register a content file's frontmatter so it appears in
+   * site.posts / site.pages / site.categories.<x> / site.tags.<x>.
+   * Mirrors lib/renderer/index.ts SiteRenderer.registerContent. Call this
+   * for every content file BEFORE rendering anything.
+   */
+  registerContent(filePath, frontmatter) {
+    const outputPath = String(filePath)
+      .replace(/\.(md|mdx|markdown|html?)$/i, ".html")
+      .replace(/\.(json|toml)$/i, ".html");
+    this.content.push({ path: filePath, frontmatter: frontmatter || {}, outputPath });
+    this.collectionsCache = null;
+  }
+
+  computeCollections() {
+    const posts = [];
+    const pages = [];
+    const categories = {};
+    const tags = {};
+
+    for (const item of this.content) {
+      const url = "/" + item.outputPath;
+      const entry = { ...item.frontmatter, url, path: item.path };
+
+      const explicit = item.frontmatter.collection;
+      const isPost =
+        explicit === "posts" ||
+        item.path.startsWith("posts/") ||
+        item.path.startsWith("_posts/");
+
+      if (isPost) posts.push(entry);
+      else pages.push(entry);
+
+      const cats = item.frontmatter.categories;
+      if (Array.isArray(cats)) {
+        for (const cat of cats) {
+          const key = String(cat);
+          (categories[key] ||= []).push(entry);
+        }
+      }
+      const itemTags = item.frontmatter.tags;
+      if (Array.isArray(itemTags)) {
+        for (const t of itemTags) {
+          const key = String(t);
+          (tags[key] ||= []).push(entry);
+        }
+      }
+    }
+
+    return { posts, pages, categories, tags };
+  }
+
+  getCollections() {
+    return this.collectionsCache ??= this.computeCollections();
+  }
+
   getGlobalData() {
     const obj = {};
     for (const [k, v] of this.data) obj[k] = v;
+    const { posts, pages, categories, tags } = this.getCollections();
+    const userSite = obj.site ?? {};
+    obj.site = { ...userSite, posts, pages, categories, tags };
+    obj.posts = posts;
+    obj.pages = pages;
     return obj;
   }
 
