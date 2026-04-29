@@ -15,10 +15,17 @@
  *   4. Returns HTML with strict CSP, separate origin, cross-origin isolation
  */
 
+import * as TOML from "@ltd/j-toml";
 import { getRepoToken, getRepoId } from "./github-auth.js";
 import { getBranchSha, getTree, fetchBlobs, filterByPrefix } from "./github-tree.js";
 import { WorkerRenderer } from "./renderer.js";
 import { loadMapping, resolvePreview } from "./preview-mapping.js";
+
+/** Parse a TOML string into a plain JS object (drops Symbol-tagged metadata). */
+function TOMLPARSE(content) {
+  const obj = TOML.parse(content, 1.0, "\n", false);
+  return JSON.parse(JSON.stringify(obj));
+}
 
 const ALLOWED_PARENTS = [
   "https://interleaved.app",
@@ -186,23 +193,23 @@ export default {
       //   - 11ty: _layouts/, _includes/, _data/
       const IGNORE_DIR_RE = /^(node_modules|\.git|\.github|public|static|assets|dist|build|out|\.next|\.nuxt|\.astro|_site|\.cache)\//;
 
-      // Templates: .html anywhere that's not in ignored dirs, biased to known template dirs
+      // Templates: .html / .liquid anywhere that's not in ignored dirs, biased to known template dirs
       const templateEntries = tree.filter((e) => {
-        if (e.type !== "blob" || !/\.html?$/i.test(e.path)) return false;
+        if (e.type !== "blob" || !/\.(html?|liquid)$/i.test(e.path)) return false;
         if (IGNORE_DIR_RE.test(e.path)) return false;
         return true;
       });
 
-      // Data files: .json in data directories OR content/*.json (flat layouts)
+      // Data files: .json / .toml in data directories OR content/*.{json,toml} (flat layouts)
       const dataEntries = tree.filter((e) => {
-        if (e.type !== "blob" || !/\.json$/i.test(e.path)) return false;
+        if (e.type !== "blob" || !/\.(json|toml)$/i.test(e.path)) return false;
         if (IGNORE_DIR_RE.test(e.path)) return false;
         if (
           e.path.startsWith("data/") ||
           e.path.startsWith("_data/") ||
           e.path.startsWith("src/data/") ||
-          // Flat layout: content/*.json (single-page sites that use JSON as sections)
-          /^content\/[^/]+\.json$/.test(e.path)
+          // Flat layout: content/*.{json,toml} (single-page sites that use data as sections)
+          /^content\/[^/]+\.(json|toml)$/.test(e.path)
         ) {
           return true;
         }
@@ -287,7 +294,7 @@ export default {
           .replace(/^layouts\//, "")
           .replace(/^_includes\//, "")
           .replace(/^src\/layouts\//, "")
-          .replace(/\.html?$/i, "");
+          .replace(/\.(html?|liquid)$/i, "");
         // Partials: files prefixed with _
         const basename = name.split("/").pop() || name;
         if (basename.startsWith("_")) {
@@ -297,31 +304,39 @@ export default {
           renderer.registerTemplate(name, source);
           // Also register under the original path (with dir) so mapping.json
           // can reference templates by full path
-          if (path !== name + ".html") {
-            renderer.registerTemplate(path.replace(/\.html?$/i, ""), source);
+          const fullName = path.replace(/\.(html?|liquid)$/i, "");
+          if (fullName !== name) {
+            renderer.registerTemplate(fullName, source);
           }
         }
       }
 
       // Register data files. Strip common prefixes to get the variable name.
+      // Supports .json and .toml — TOML preferred for new files.
       for (const [path, content] of Object.entries(data)) {
+        const ext = path.endsWith(".toml") ? "toml" : "json";
         const name = path
           .replace(/^data\//, "")
           .replace(/^_data\//, "")
           .replace(/^src\/data\//, "")
-          .replace(/^content\//, "")  // flat layout: content/hero.json → hero
-          .replace(/\.json$/i, "");
+          .replace(/^content\//, "")
+          .replace(/\.(json|toml)$/i, "");
         try {
-          renderer.registerData(name, JSON.parse(content));
+          if (ext === "toml") {
+            const obj = TOMLPARSE(content);
+            renderer.registerData(name, obj);
+          } else {
+            renderer.registerData(name, JSON.parse(content));
+          }
         } catch {
-          // Skip invalid JSON
+          // Skip invalid data file
         }
       }
 
       // 8. Render based on resolved mode
       let html;
 
-      const renderIndex = () => {
+      const renderIndex = async () => {
         const parsedPosts = Object.entries(posts).map(([path, content]) => {
           const { frontmatter } = renderer.parseFrontmatter(content);
           return { html: "", frontmatter, path };
@@ -331,25 +346,25 @@ export default {
 
       if (entry && renderMode === "entry" && entryContent) {
         const targetPath = renderContentPath || entry;
-        const isJson = targetPath.endsWith(".json");
-        const rendered = isJson
-          ? renderer.renderJson(targetPath, entryContent)
-          : renderer.renderMarkdown(targetPath, entryContent);
+        const isData = /\.(json|toml)$/i.test(targetPath);
+        const rendered = isData
+          ? await renderer.renderJson(targetPath, entryContent)
+          : await renderer.renderMarkdown(targetPath, entryContent);
         html = rendered.html;
       } else if (entry && renderMode === "url" && renderUrl) {
         // If a content file backs this URL, render it; otherwise fall back to index
         if (entryContent && renderContentPath) {
-          const isJson = renderContentPath.endsWith(".json");
-          const rendered = isJson
-            ? renderer.renderJson(renderContentPath, entryContent)
-            : renderer.renderMarkdown(renderContentPath, entryContent);
+          const isData = /\.(json|toml)$/i.test(renderContentPath);
+          const rendered = isData
+            ? await renderer.renderJson(renderContentPath, entryContent)
+            : await renderer.renderMarkdown(renderContentPath, entryContent);
           html = rendered.html;
         } else {
-          html = renderIndex();
+          html = await renderIndex();
         }
       } else {
         // Site preview or template edit — render the index
-        html = renderIndex();
+        html = await renderIndex();
       }
 
       if (!html) {
